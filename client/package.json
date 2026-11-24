@@ -5,10 +5,10 @@
   "type": "module",
   "description": "KHTN-Lab 3D — Phòng thí nghiệm 3D ảo Vật lí, Hóa học, Sinh học Lớp 10 (Kết nối tri thức)",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite",
     "build": "vite build",
     "build:usb": "vite build --mode usb",
-    "preview": "vite preview --host 0.0.0.0",
+    "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

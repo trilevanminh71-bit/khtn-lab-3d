@@ -5,6 +5,10 @@
  */
 import type { AppSettings } from '../types/lab';
 
+/** Cặp cổng cố định của dự án (tránh trùng dự án khác dùng 5173/8000) */
+export const FRONTEND_PORT = 5175;
+export const BACKEND_PORT = 8001;
+
 export const APP_CONFIG = {
   appName: 'KHTN-Lab 3D',
   appTagline: 'Phòng thí nghiệm 3D ảo siêu nhẹ — Lớp 10',
@@ -28,7 +32,10 @@ export const APP_CONFIG = {
   autosaveMs: 5000,
   /** Link gói cập nhật bài học JSON (GitHub raw/Drive). Rỗng = tắt */
   remoteUpdateUrl: import.meta.env.VITE_REMOTE_UPDATE_URL ?? '',
-  /** URL backend; rỗng = tự dò theo hostname hiện tại cổng 8000 */
+  /**
+   * URL backend; rỗng = tự dò `<hostname hiện tại>:8001` → mở từ localhost sẽ là http://localhost:8001,
+   * học sinh mở qua IP LAN sẽ tự gọi đúng máy giáo viên (không cứng "localhost" để tránh gọi nhầm máy học sinh).
+   */
   apiUrl: import.meta.env.VITE_API_URL ?? '',
   /** Ngưỡng FPS: dưới mức này ThreeEngineCore tự hạ chất lượng */
   minFps: 28,
@@ -38,14 +45,14 @@ export const APP_CONFIG = {
   qrMaxLength: 180
 } as const;
 
-/** Suy ra URL API mặc định: ưu tiên biến môi trường, sau đó máy chủ hiện tại :8000 (mạng LAN lớp học) */
+/** Suy ra URL API mặc định: ưu tiên biến môi trường, sau đó máy chủ hiện tại :8001 (mạng LAN lớp học) */
 export function resolveDefaultApiUrl(): string {
   if (APP_CONFIG.apiUrl) return APP_CONFIG.apiUrl.replace(/\/$/, '');
   if (typeof window !== 'undefined' && window.location.hostname) {
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    return `${protocol}//${window.location.hostname}:8000`;
+    return `${protocol}//${window.location.hostname}:${BACKEND_PORT}`;
   }
-  return 'http://localhost:8000';
+  return `http://localhost:${BACKEND_PORT}`;
 }
 
 /** Cài đặt mặc định cho lần đầu mở web */

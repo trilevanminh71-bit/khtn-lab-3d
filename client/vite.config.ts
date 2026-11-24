@@ -8,8 +8,25 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+/** Cặp cổng cố định của dự án (5173/8000 dành cho dự án khác) */
+const FRONTEND_PORT = 5175;
+const BACKEND_URL = 'http://localhost:8001';
+
 export default defineConfig(({ mode }) => ({
   base: mode === 'usb' ? './' : '/',
+  // Dev server: cố định 5175, báo lỗi thay vì tự nhảy cổng; proxy /api → backend 8001
+  server: {
+    host: true,
+    port: FRONTEND_PORT,
+    strictPort: true,
+    proxy: { '/api': { target: BACKEND_URL, changeOrigin: true } }
+  },
+  preview: {
+    host: true,
+    port: FRONTEND_PORT,
+    strictPort: true,
+    proxy: { '/api': { target: BACKEND_URL, changeOrigin: true } }
+  },
   plugins: [
     react(),
     VitePWA({

@@ -38,6 +38,8 @@ Backend: fastapi, uvicorn[standard], sqlalchemy[asyncio] (kèm greenlet — bắ
 
 ## 4. Ghi chú kĩ thuật đã kiểm chứng
 
+- **Cổng cố định: Frontend 5175, Backend 8001** (5173/8000 dành cho dự án khác). Vite `strictPort`, proxy `/api` → 8001; app tự dò API `<hostname>:8001`.
+
 - Engine dev: `window.__khtnEngine` (chỉ khi `import.meta.env.DEV`) để kiểm tra cảnh 3D từ DevTools.
 - Trình duyệt nhúng của Claude desktop chặn Service Worker → kiểm tra PWA/offline bằng Chrome/Edge thật.
 - Heredoc dài trong Bash tool có thể lỗi phân tích cú pháp → dùng Write tool để tạo file.

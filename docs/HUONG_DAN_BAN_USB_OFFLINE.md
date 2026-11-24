@@ -31,7 +31,7 @@ Chép thư mục `KHTN-Lab-USB` vào ổ cứng để chạy nhanh hơn và dữ
 Học sinh nộp bài → phiếu có **mã QR < 180 ký tự**. Giáo viên quét bằng Cổng GV trên máy có camera (laptop chạy bản USB ở `localhost` dùng được camera), hoặc gõ/dán chuỗi mã.
 
 ## 6. Mạng LAN nội bộ không Internet
-Nếu có một router Wi-Fi (không cần Internet): chạy `start.bat` trên máy giáo viên → học sinh mở `http://<IP máy GV>:5173`, bài nộp tự đồng bộ về máy chủ SQLite trên máy giáo viên. Xem [HUONG_DAN_QUAN_TRI_VA_DEPLOY.md](HUONG_DAN_QUAN_TRI_VA_DEPLOY.md).
+Nếu có một router Wi-Fi (không cần Internet): chạy `start.bat` trên máy giáo viên → học sinh mở `http://<IP máy GV>:5175`, bài nộp tự đồng bộ về máy chủ SQLite trên máy giáo viên. Xem [HUONG_DAN_QUAN_TRI_VA_DEPLOY.md](HUONG_DAN_QUAN_TRI_VA_DEPLOY.md).
 
 ## 7. Xử lí sự cố
 | Hiện tượng | Cách xử lí |

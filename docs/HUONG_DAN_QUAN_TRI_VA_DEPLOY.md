@@ -6,10 +6,10 @@ Máy giáo viên (Windows/macOS/Linux) cài **Python ≥ 3.10** và **Node.js �
 - macOS/Linux: `./start.sh`
 
 Script tự tạo `server/.venv`, cài thư viện, chạy:
-- Backend FastAPI: `0.0.0.0:8000` (CSDL SQLite `server/local_lab.db`)
-- Frontend: `0.0.0.0:5173`
+- Backend FastAPI: `0.0.0.0:8001` (CSDL SQLite `server/local_lab.db`)
+- Frontend: `0.0.0.0:5175`
 
-Học sinh cùng Wi-Fi mở `http://<IP máy GV>:5173` (xem IP: `ipconfig` trên Windows). Ứng dụng tự dò API tại `http://<cùng IP>:8000`; nếu khác, đặt trong ⚙ Cài đặt → **Máy chủ lớp học** → *Lưu & thử*.
+Học sinh cùng Wi-Fi mở `http://<IP máy GV>:5175` (xem IP: `ipconfig` trên Windows). Ứng dụng tự dò API tại `http://<cùng IP>:8001`; nếu khác, đặt trong ⚙ Cài đặt → **Máy chủ lớp học** → *Lưu & thử*.
 
 **Tường lửa Windows:** cho phép Python và Node khi được hỏi (mạng Private).
 
@@ -19,7 +19,8 @@ Học sinh cùng Wi-Fi mở `http://<IP máy GV>:5173` (xem IP: `ipconfig` trên
 | `DATABASE_URL` | Trống → SQLite. Neon: `postgresql://user:pass@host/db?sslmode=require` (tự chuyển sang driver asyncpg). PostgreSQL lỗi kết nối khi khởi động → tự fallback SQLite. |
 | `GEMINI_API_KEY` | Khóa Google AI Studio cho trợ lý AI. Trống → gợi ý Socratic offline. |
 | `GEMINI_MODEL` | Mặc định `gemini-2.5-flash` |
-| `CORS_ORIGINS` | Thêm origin được phép (đã tự cho phép localhost, IP LAN nội bộ, `*.vercel.app`) |
+| `ALLOWED_ORIGINS` | Tên miền frontend thêm, phân cách dấu phẩy (đã tự cho phép localhost:5175, IP LAN nội bộ, mọi `*.vercel.app`). Tên cũ `CORS_ORIGINS` vẫn được đọc. |
+| `PORT` | Cổng lắng nghe. Render tự cấp — không cần đặt; chạy máy riêng mặc định 8001 |
 | `ADMIN_TOKEN` | Bảo vệ `GET /api/backup` và `POST /api/plugins` (header `X-Admin-Token`) |
 
 ## 3. API
@@ -35,7 +36,7 @@ Học sinh cùng Wi-Fi mở `http://<IP máy GV>:5173` (xem IP: `ipconfig` trên
 | GET/POST | `/api/backup` | Sao lưu / khôi phục |
 | POST | `/api/tutor/analyze` | Trợ lý AI Socratic (Gemini + guardrail + cache CSDL) |
 
-Tài liệu tương tác: `http://<máy chủ>:8000/docs`.
+Tài liệu tương tác: `http://<máy chủ>:8001/docs`.
 
 ## 4. Deploy Cloud miễn phí
 ### Neon (PostgreSQL)
@@ -43,8 +44,10 @@ Tài liệu tương tác: `http://<máy chủ>:8000/docs`.
 
 ### Render (Backend)
 1. Đưa mã nguồn lên GitHub.
-2. Render → **New → Blueprint** → chọn repo (dùng `server/render.yaml`).
-3. Điền `DATABASE_URL`, `GEMINI_API_KEY`, `CORS_ORIGINS` (URL Vercel). Health check: `/api/health`.
+2. Render → **New → Blueprint** → chọn repo → **Blueprint Path:** `server/render.yaml`.
+   (Hoặc **New → Web Service**: Root Directory `server`, Build `pip install -r requirements.txt`, Start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.)
+3. Điền `DATABASE_URL` (Neon), `GEMINI_API_KEY`; `ALLOWED_ORIGINS` chỉ cần khi dùng tên miền riêng ngoài `*.vercel.app`. Health check: `/api/health`.
+   Mở `https://<tên>.onrender.com/api/health` → phải thấy `"database": "postgresql"`. Nếu thấy `sqlite` nghĩa là kết nối Neon lỗi và máy chủ đã tạm dùng SQLite (dữ liệu sẽ mất khi Render khởi động lại) — kiểm tra lại `DATABASE_URL`.
 4. Gói miễn phí "ngủ" sau 15 phút — lần gọi đầu mất ~30–50 giây; app vẫn chạy offline trong lúc chờ.
 
 ### Vercel (Frontend)

@@ -29,16 +29,16 @@ Mỗi học sinh nhận **bộ thông số ẩn riêng** (g, E, r, nồng độ�
 - Windows: nhấp đúp `start.bat`
 - macOS / Linux: `./start.sh`
 
-Mở `http://localhost:5173`. Học sinh cùng Wi-Fi mở `http://<IP máy giáo viên>:5173`.
+Mở `http://localhost:5175` (giao diện) — máy chủ API ở `http://localhost:8001` (tài liệu API: `/docs`). Dự án dùng cố định cặp cổng **5175 / 8001** để không trùng dự án khác dùng 5173 / 8000. Học sinh cùng Wi-Fi mở `http://<IP máy giáo viên>:5175`.
 
 Chạy thủ công:
 
 ```bash
 # Giao diện
-cd client && npm install && npm run dev
+cd client && npm install && npm run dev            # → http://localhost:5175 (proxy /api → 8001)
 # Máy chủ (tùy chọn — app vẫn chạy đầy đủ khi không có máy chủ)
 cd server && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # macOS/Linux: .venv/bin/pip
-.venv/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+.venv/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 ## Đóng gói USB offline
@@ -53,7 +53,7 @@ Tạo thư mục `KHTN-Lab-USB/` (≈ 1,4 MB). Chép vào USB, nhấp đúp `CHA
 ## Deploy Cloud (miễn phí)
 
 - **Frontend → Vercel:** Root Directory `client`, dùng sẵn `client/vercel.json`. Biến `VITE_API_URL` = URL backend.
-- **Backend → Render:** dùng `server/render.yaml` (Blueprint). Đặt `DATABASE_URL` (Neon PostgreSQL), `GEMINI_API_KEY`.
+- **Backend → Render:** dùng `server/render.yaml` (Blueprint Path). Đặt `DATABASE_URL` (Neon PostgreSQL), `GEMINI_API_KEY`; `ALLOWED_ORIGINS` khi dùng tên miền riêng. Cổng lấy từ `$PORT` của Render.
 - **CSDL → Neon PostgreSQL:** dán chuỗi kết nối `postgresql://...?...sslmode=require`; không đặt thì tự dùng SQLite.
 
 Chi tiết: [docs/HUONG_DAN_QUAN_TRI_VA_DEPLOY.md](docs/HUONG_DAN_QUAN_TRI_VA_DEPLOY.md).

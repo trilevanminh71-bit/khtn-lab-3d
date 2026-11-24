@@ -1,7 +1,7 @@
 # Hướng dẫn học sinh — KHTN-Lab 3D trên máy tính & điện thoại
 
 ## 1. Mở ứng dụng
-- **Máy tính:** Chrome, Edge, Cốc Cốc hoặc Firefox → địa chỉ thầy cô cung cấp (ví dụ `http://192.168.1.10:5173`) hoặc chạy từ USB.
+- **Máy tính:** Chrome, Edge, Cốc Cốc hoặc Firefox → địa chỉ thầy cô cung cấp (ví dụ `http://192.168.1.10:5175`) hoặc chạy từ USB.
 - **iPhone/iPad (Safari):** mở địa chỉ → nút **Chia sẻ** → **Thêm vào MH chính**. Lần sau mở từ biểu tượng 🧪, chạy cả khi không có mạng.
 - **Android (Chrome):** menu ⋮ → **Cài đặt ứng dụng / Thêm vào màn hình chính**.
 

@@ -95,7 +95,7 @@ export default function SettingsModal() {
               <input className="input font-mono text-xs" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder={resolveDefaultApiUrl()} aria-label="Địa chỉ API" />
               <button className="btn" onClick={() => void testApi()}>Lưu & thử</button>
             </div>
-            <p className="mt-1 text-xs text-slate-400">Để trống = tự dò {resolveDefaultApiUrl()}. Ví dụ mạng LAN: http://192.168.1.10:8000</p>
+            <p className="mt-1 text-xs text-slate-400">Để trống = tự dò {resolveDefaultApiUrl()}. Ví dụ mạng LAN: http://192.168.1.10:8001</p>
             {apiMsg && <p className="text-xs">{apiMsg}</p>}
           </div>
           <div>

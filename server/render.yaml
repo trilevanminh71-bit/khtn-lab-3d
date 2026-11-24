@@ -2,10 +2,13 @@
 services:
   - type: web
     name: khtn-lab-3d-api
+    plan: free
+    region: singapore
     runtime: python
     rootDir: server
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Render tự cấp biến $PORT (mặc định 10000) — KHÔNG đặt cứng; chạy máy khác thiếu PORT thì dùng 8001
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8001} --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
@@ -16,7 +19,8 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
-      - key: CORS_ORIGINS
+      # Tên miền frontend thêm (phân cách dấu phẩy). *.vercel.app đã được chấp nhận sẵn.
+      - key: ALLOWED_ORIGINS
         sync: false
       - key: ADMIN_TOKEN
         generateValue: true

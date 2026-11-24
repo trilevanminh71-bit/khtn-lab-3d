@@ -31,7 +31,8 @@ class Base(DeclarativeBase):
 def normalize_database_url(raw: str | None) -> tuple[str, dict]:
     """
     Chuẩn hóa DATABASE_URL.
-    Đầu vào: chuỗi kết nối (có thể rỗng, dạng postgres://, postgresql://, kèm ?sslmode=require của Neon).
+    Đầu vào: chuỗi kết nối (có thể rỗng, dạng postgres://, postgresql://, kèm ?sslmode=require&channel_binding=require của Neon,
+    kể cả endpoint pooled `-pooler`).
     Đầu ra: (url cho SQLAlchemy async, connect_args).
     """
     if not raw or not raw.strip():
@@ -53,6 +54,12 @@ def normalize_database_url(raw: str | None) -> tuple[str, dict]:
     query.pop("channel_binding", None)
     if sslmode and sslmode != "disable":
         connect_args["ssl"] = "require"
+    elif "neon.tech" in parts.netloc:
+        # Neon luôn yêu cầu SSL kể cả khi chuỗi kết nối thiếu sslmode
+        connect_args["ssl"] = "require"
+    # Neon pooled endpoint (-pooler) chạy PgBouncer chế độ transaction → phải tắt cache prepared statement của asyncpg
+    connect_args["statement_cache_size"] = 0
+    query["prepared_statement_cache_size"] = "0"
     url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
     return url, connect_args
 

@@ -1,0 +1,25 @@
+# Node / Vite
+node_modules/
+client/dist/
+client/dev-dist/
+*.log
+# Python
+__pycache__/
+*.pyc
+server/.venv/
+.venv/
+server/local_lab.db
+server/*.db
+# Môi trường & bí mật
+.env
+server/.env
+client/.env
+client/.env.local
+# Gói USB sinh ra
+KHTN-Lab-USB/
+# Hệ điều hành / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/settings.local.json

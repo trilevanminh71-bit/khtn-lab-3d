@@ -1,0 +1,22 @@
+# Render Blueprint — deploy backend miễn phí. Free tier ngủ sau 15 phút: frontend gọi /api/health để đánh thức.
+services:
+  - type: web
+    name: khtn-lab-3d-api
+    runtime: python
+    rootDir: server
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ADMIN_TOKEN
+        generateValue: true

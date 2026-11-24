@@ -1,0 +1,12 @@
+# Backend KHTN-Lab 3D — FastAPI + SQLAlchemy async
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy[asyncio]>=2.0.30
+aiosqlite>=0.20
+# Neon PostgreSQL bất đồng bộ (DATABASE_URL=postgresql://...)
+asyncpg>=0.29
+# Giữ psycopg2-binary cho công cụ quản trị / migration đồng bộ
+psycopg2-binary>=2.9
+pydantic>=2.7
+google-genai>=0.3
+python-dotenv>=1.0

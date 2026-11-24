@@ -1,0 +1,26 @@
+/**
+ * data/userGuidesData.ts — Nội dung Trung tâm Hướng dẫn trên web (tìm kiếm được, chạy offline).
+ */
+export interface GuideSection {
+  id: string;
+  audience: 'Học sinh' | 'Giáo viên' | 'Quản trị' | 'Tất cả';
+  title: string;
+  body: string[];
+}
+
+export const USER_GUIDES: GuideSection[] = [
+  { id: 'start', audience: 'Học sinh', title: 'Bắt đầu một bài thí nghiệm', body: ['Chọn môn (Vật lí / Hóa học / Sinh học) trên thanh trên cùng, sau đó chọn bài trong danh sách bên trái.', 'Nhập họ tên, mã học sinh và mã lớp để hệ thống sinh bộ thông số riêng cho em (mỗi bạn có số liệu khác nhau).', 'Làm bài kiểm tra nhanh trước thí nghiệm (3 câu) — không tính điểm, giúp đo mức tăng tiến bộ.'] },
+  { id: 'controls', audience: 'Học sinh', title: 'Thao tác trong không gian 3D', body: ['Máy tính: kéo chuột trái để xoay, cuộn chuột để phóng to/thu nhỏ, kéo chuột phải để dịch chuyển.', 'Điện thoại: một ngón để xoay, hai ngón để phóng to và dịch chuyển.', 'Chạm vào dụng cụ phát sáng để thực hiện bước; kéo dụng cụ tới điểm gắn màu xanh để lắp ráp.', 'Bấm nút "Về góc nhìn chuẩn" nếu bị lạc góc nhìn.'] },
+  { id: 'safety', audience: 'Học sinh', title: 'An toàn phòng thí nghiệm', body: ['Trước bài Hóa học / Sinh học, bật đủ trang bị: Kính bảo hộ, Găng tay, Kiểm tra nhãn hóa chất trên thanh An toàn.', 'Thiếu bảo hộ khi thao tác hóa chất sẽ phát cảnh báo sự cố và trừ điểm An toàn.', 'Đọc kĩ nhãn: tên IUPAC, nồng độ, kí hiệu nguy hiểm.'] },
+  { id: 'measure', audience: 'Học sinh', title: 'Đo và ghi số liệu', body: ['Mỗi lần bấm "Đo" (hoặc chạm dụng cụ), số liệu tự ghi vào bảng.', 'Đo đủ số lần tối thiểu, sau đó tự tính kết quả bằng Máy tính bỏ túi và nhập vào ô Kết quả.', 'Bài tự lưu nháp mỗi 5 giây — mất điện hay tắt trình duyệt vẫn làm tiếp được.'] },
+  { id: 'meniscus', audience: 'Học sinh', title: 'Luyện đọc mặt khum', body: ['Với burette/ống đong, mở "Đọc mặt khum", kéo thanh tầm mắt sao cho mắt ngang đáy mặt khum rồi nhập số đọc.', 'Mắt cao hơn → đọc nhỏ hơn thật (với burette); mắt thấp hơn → đọc lớn hơn. Đây là sai số thị sai.'] },
+  { id: 'report', audience: 'Học sinh', title: 'Nộp phiếu báo cáo & mã QR', body: ['Bấm "Nộp bài" để xem phiếu A4 với điểm chi tiết từng tiêu chí và lí do trừ điểm.', 'Không có mạng: đưa mã QR cho thầy cô quét. Có mạng LAN: bài tự gửi về máy chủ lớp.', 'Có thể in phiếu (Ctrl+P) hoặc lưu PDF.'] },
+  { id: 'ai', audience: 'Học sinh', title: 'Trợ lý AI Socratic', body: ['Trợ lý đặt câu hỏi gợi mở thay vì cho đáp án.', 'Khi offline hoặc AI phản hồi quá 8 giây, trợ lý dùng kho gợi ý cục bộ.', 'Có thể bấm micro để hỏi bằng giọng nói (chỉ khi có mạng, trình duyệt hỗ trợ).'] },
+  { id: 'pwa', audience: 'Tất cả', title: 'Cài ứng dụng lên điện thoại / máy tính', body: ['Android (Chrome): menu ⋮ → "Thêm vào màn hình chính" / "Cài đặt ứng dụng".', 'iPhone (Safari): nút Chia sẻ → "Thêm vào MH chính".', 'Máy tính (Chrome/Edge): biểu tượng cài đặt trên thanh địa chỉ.', 'Sau lần mở đầu tiên, ứng dụng chạy hoàn toàn offline.'] },
+  { id: 'teacher', audience: 'Giáo viên', title: 'Cổng giáo viên', body: ['Bấm "Cổng GV" và nhập mã PIN (mặc định 2026 — hãy đổi ngay trong Cài đặt).', 'Tab Thu bài: quét QR bằng camera hoặc dán chuỗi mã; tab Đồng bộ LAN lấy bài từ máy chủ lớp.', 'Tab Phân tích: điểm trung bình, ngộ nhận phổ biến, mức tăng Pre/Post (hệ số Hake g).', 'Xuất CSV (UTF-8 BOM) mở thẳng bằng Excel không lỗi font.'] },
+  { id: 'cms', audience: 'Giáo viên', title: 'Sửa đề & tạo bài No-Code', body: ['CMS: chọn bài, sửa tên, mục tiêu, câu hỏi, khoảng thông số rồi Lưu — áp dụng ngay trên máy này.', 'Xuất gói .json để chia sẻ cho đồng nghiệp hoặc đưa lên GitHub/Drive làm gói cập nhật từ xa.', 'No-Code Wizard: 4 bước — chọn template 3D, đặt tên, khai báo thông số & công thức, câu hỏi.', 'Tài nguyên 3D: tải ảnh tiêu bản thật hoặc mô hình .glb để thay mô hình mặc định.'] },
+  { id: 'khkt', audience: 'Giáo viên', title: 'Chế độ trình diễn KHKT', body: ['Bật "KHKT" (cần PIN) để hiện FPS, Draw Calls, RAM trực tiếp.', 'Nút giả lập sự cố giúp giám khảo thấy cơ chế cảnh báo an toàn.', 'Tab KHKT trong Cổng GV có so sánh 10T1/10T2: t-test Welch, Cohen d, biểu đồ.'] },
+  { id: 'lowend', audience: 'Tất cả', title: 'Máy cấu hình yếu', body: ['Cài đặt → "Đồ họa máy yếu" giảm độ phân giải, tắt bóng đổ và khử răng cưa.', 'Bật "Tự thích ứng FPS" để ứng dụng tự hạ chất lượng khi FPS < 28.', 'Nếu báo lỗi WebGL: bật "Sử dụng tăng tốc phần cứng" trong cài đặt trình duyệt rồi khởi động lại.'] },
+  { id: 'lan', audience: 'Quản trị', title: 'Máy chủ mạng LAN lớp học', body: ['Trên máy giáo viên chạy start.bat (Windows) hoặc start.sh (macOS/Linux).', 'Học sinh mở http://<IP máy GV>:5173 cùng mạng Wi-Fi; Cài đặt → API URL đặt http://<IP máy GV>:8000.', 'Không cần Internet; dữ liệu lưu SQLite local_lab.db trên máy GV.'] },
+  { id: 'debug', audience: 'Quản trị', title: 'Báo lỗi cho nhóm phát triển', body: ['Thêm ?debug=true vào địa chỉ để mở bảng Debug: trục tọa độ, điểm gắn, JSON trạng thái, nhảy bước.', 'Bấm "Xuất Bug Snapshot" để tải file JSON gửi cho nhóm.'] }
+];

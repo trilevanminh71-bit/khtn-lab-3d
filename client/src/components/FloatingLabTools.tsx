@@ -10,6 +10,7 @@ import { useLabStore } from '../store/useLabStore';
 import { evaluateFormula } from '../engines/formulaEvaluator';
 import { mean } from '../engines/statistics';
 import { fmtVi } from '../services/appServices';
+import { columnLabel } from '../utils/columnLabels';
 
 const KEYS = ['7', '8', '9', '/', 'sqrt(', '4', '5', '6', '*', '^', '1', '2', '3', '-', '(', '0', '.', 'ans', '+', ')'];
 
@@ -95,7 +96,7 @@ export function FloatingLabTools() {
                 const mu = mean(trials.map((t) => t.values[m.key]));
                 return (
                   <button key={m.key} className="chip bg-slate-800 text-slate-200" onClick={() => setExpr(expr + String(Number(mu.toPrecision(6))))} title={`Chèn trung bình ${m.label}`}>
-                    x̄ {m.key} = {fmtVi(mu, m.decimals + 1)}
+                    x̄ {columnLabel(m)} = {fmtVi(mu, m.decimals + 1)}
                   </button>
                 );
               })}

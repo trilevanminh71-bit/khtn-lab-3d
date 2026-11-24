@@ -15,6 +15,7 @@ import { absError, mean } from '../engines/statistics';
 import { fmtVi } from '../services/appServices';
 import { sanitizeCode } from '../utils/qrSyncCodec';
 import { hashString } from '../utils/randomizer';
+import { columnLabel } from '../utils/columnLabels';
 import { ModalShell } from './ModalShell';
 import type { QuizQuestion } from '../types/lab';
 
@@ -373,7 +374,7 @@ export function LabHUD() {
                       <th className="p-1">Lần</th>
                       {plugin.params.map((p) => (
                         <th key={p.key} className="p-1">
-                          {p.key} ({p.unit || '–'})
+                          {columnLabel(p)} ({p.unit || '–'})
                         </th>
                       ))}
                       {plugin.measurements.map((m) => (

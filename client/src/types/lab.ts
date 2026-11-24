@@ -334,7 +334,7 @@ export interface TutorKbEntry {
 export interface TutorMessage {
   role: 'student' | 'tutor';
   text: string;
-  source: 'ai' | 'offline' | 'cache' | 'guardrail' | 'student';
+  source: 'ai' | 'offline' | 'cache' | 'guardrail' | 'student' | 'system';
   at: number;
 }
 

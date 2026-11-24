@@ -8,6 +8,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { LabHUD } from './components/LabHUD';
+import { TutorErrorBoundary } from './components/TutorErrorBoundary';
 import { SafetyPpeBar } from './components/SafetyPpeBar';
 import { FloatingLabTools } from './components/FloatingLabTools';
 import { ConfirmDialogModal } from './components/ConfirmDialogModal';
@@ -36,6 +37,8 @@ const MeniscusReaderModal = lazy(() => import('./components/MeniscusReaderModal'
 const AiTutorDrawer = lazy(() => import('./components/AiTutorDrawer'));
 
 const TOAST_STYLE = { info: 'border-sky-500', success: 'border-ok', warning: 'border-amber-400', danger: 'border-danger' } as const;
+
+const closeTutor = (): void => useLabStore.getState().setTutorOpen(false);
 
 export default function App() {
   const modal = useLabStore((s) => s.modal);
@@ -180,8 +183,16 @@ export default function App() {
         {modal === 'teacher' && <TeacherPortal />}
         {modal === 'settings' && <SettingsModal />}
         {modal === 'meniscus' && <MeniscusReaderModal />}
-        {tutorOpen && <AiTutorDrawer />}
       </Suspense>
+
+      {/* Trợ lý AI có Suspense + Error Boundary riêng: lỗi ở đây không được làm sập ứng dụng */}
+      {tutorOpen && (
+        <TutorErrorBoundary onClose={closeTutor}>
+          <Suspense fallback={<div className="fixed bottom-4 right-4 z-50 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">Đang mở trợ lý…</div>}>
+            <AiTutorDrawer />
+          </Suspense>
+        </TutorErrorBoundary>
+      )}
 
       <div className="pointer-events-none fixed bottom-3 left-1/2 z-[60] flex w-[min(92vw,420px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
         {toasts.map((t) => (

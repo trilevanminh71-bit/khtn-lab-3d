@@ -1,6 +1,6 @@
 /**
  * Plugin Sinh học 10 — Thí nghiệm co nguyên sinh và phản co nguyên sinh
- * (SGK KNTT Sinh học 10, Bài 12: Thực hành thí nghiệm co và phản co nguyên sinh).
+ * (SGK KNTT Sinh học 10, Bài 11: Thực hành: Thí nghiệm co và phản co nguyên sinh).
  * Bộ giải: plasmolysis. Thông số ẩn cIso: nồng độ saccharose đẳng trương với dịch bào (mol/L).
  */
 import type { LabPluginDef } from '../../types/lab';
@@ -10,8 +10,8 @@ export const plasmolysisPlugin: LabPluginDef = {
   version: 1,
   subject: 'biology',
   title: 'Co nguyên sinh và phản co nguyên sinh ở tế bào biểu bì vảy hành tím',
-  shortTitle: 'Co nguyên sinh',
-  sgkRef: 'Sinh học 10 – Bài 12: Thực hành thí nghiệm co và phản co nguyên sinh',
+  shortTitle: 'Bài 11 – Co nguyên sinh',
+  sgkRef: 'Sinh học 10 – Bài 11: Thực hành: Thí nghiệm co và phản co nguyên sinh',
   chapter: 'Chương 3: Trao đổi chất qua màng và truyền tin tế bào',
   grade: 10,
   durationMin: 30,
@@ -36,6 +36,7 @@ export const plasmolysisPlugin: LabPluginDef = {
     { key: 'total', label: 'Tổng số TB đếm', unit: 'TB', decimals: 0 },
     { key: 'percent', label: 'Tỉ lệ co nguyên sinh', unit: '%', decimals: 0 }
   ],
+  charts: [{ id: 'percent', title: 'Tỉ lệ co nguyên sinh theo nồng độ', kind: 'scatter', x: 'C', y: 'percent', xLabel: 'C (mol/L)', yLabel: 'Tỉ lệ (%)', refLine: { value: 50, label: '50%' } }],
   minTrials: 5,
   result: { key: 'cIso', label: 'Nồng độ saccharose đẳng trương với dịch bào', unit: 'mol/L', tolerancePercent: 8, decimals: 2, hint: 'Ngâm ≥ 8 phút ở nhiều nồng độ; nồng độ làm khoảng 50% tế bào co nguyên sinh chính là nồng độ đẳng trương.' },
   steps: [

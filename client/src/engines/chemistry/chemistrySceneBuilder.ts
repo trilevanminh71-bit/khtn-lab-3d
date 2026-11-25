@@ -95,7 +95,7 @@ export function buildBeakerScene(options: SceneOptions): SceneHandle {
     for (let i = 0; i < 5; i++) {
       const tube = cyl(0.04, 0.04, 0.38, glassMat(), 12, true);
       tube.position.set(-0.26 + i * 0.13, 0.2, 0);
-      const tm = mat('#312e81', { transparent: true, opacity: 0.85 });
+      const tm = mat(String(options.tubeBase ?? '#312e81'), { transparent: true, opacity: 0.85 });
       tubeMats.push(tm);
       const fill = cyl(0.036, 0.036, 0.18, tm, 12);
       fill.position.set(-0.26 + i * 0.13, 0.1, 0);
@@ -156,7 +156,7 @@ export function buildBeakerScene(options: SceneOptions): SceneHandle {
     root.add(paper);
   }
   let bath: THREE.Mesh | null = null;
-  if (variant === 'tubes') {
+  if (variant === 'tubes' && options.showBath !== false) {
     bath = box(0.9, 0.22, 0.4, mat('#38bdf8', { transparent: true, opacity: 0.45 }));
     bath.position.set(0, 0.11, 0);
     tagObject(bath, 'water-bath', 'Bể ổn nhiệt');
@@ -246,12 +246,19 @@ export function buildBeakerScene(options: SceneOptions): SceneHandle {
       };
       if (nonce !== lastNonce) {
         lastNonce = nonce;
-        from = { turb: 0, temp: 25, gas: 0, color: liquidMat.color.clone(), tube: new THREE.Color('#312e81') };
-        if (variant === 'tubes' && nonce > 0) tubeIdx = (nonce - 1) % tubeMats.length;
+        // Đo tiếp khi hoạt cảnh trước chưa xong → chốt ngay màu cuối của ống trước
+        if (anim.active) apply(1);
+        if (variant === 'tubes') {
+          const wanted = typeof v.tubeIndex === 'number' ? v.tubeIndex : Math.max(0, nonce - 1);
+          tubeIdx = ((wanted % tubeMats.length) + tubeMats.length) % tubeMats.length;
+        }
+        from = { turb: 0, temp: 25, gas: 0, color: liquidMat.color.clone(), tube: tubeMats.length ? tubeMats[tubeIdx].color.clone() : new THREE.Color('#312e81') };
         to = target;
         anim.start(vis.num(v, 'animMs'));
         if (vis.num(v, 'animMs') === 0) apply(1);
       } else if (!anim.active) {
+        // Xem trước thông số: không đổi màu ống đã phản ứng
+        target.tube = tubeMats.length ? tubeMats[tubeIdx].color.clone() : target.tube;
         from = target;
         to = target;
         apply(1);

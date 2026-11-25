@@ -9,11 +9,16 @@ import type { SceneHandle } from './sceneKit';
 import { buildCircuitScene, buildTrackScene } from './physics/physicsSceneBuilder';
 import { buildBeakerScene, buildTitrationScene } from './chemistry/chemistrySceneBuilder';
 import { buildMicroscopeScene } from './biology/biologySceneBuilder';
+import { buildCellScene, buildMembraneScene, buildSignalScene } from './biology/cellSceneBuilder';
+import { buildMoleculeScene } from './chemistry/moleculeSceneBuilder';
+import { buildAirtrackScene, buildForceScene, buildFreeFall2Scene, buildMc964Scene } from './physics/practicalSceneBuilder';
 import { getAsset } from '../offline/db';
 
 export function buildSceneForPlugin(plugin: LabPluginDef): SceneHandle {
   switch (plugin.sceneTemplate) {
     case 'track':
+      if (plugin.sceneOptions.rig === 'mc964') return buildMc964Scene(plugin.sceneOptions);
+      if (plugin.sceneOptions.rig === 'freefall2') return buildFreeFall2Scene();
       return buildTrackScene(plugin.sceneOptions);
     case 'circuit':
       return buildCircuitScene(plugin.sceneOptions);
@@ -23,6 +28,18 @@ export function buildSceneForPlugin(plugin: LabPluginDef): SceneHandle {
       return buildTitrationScene(plugin.sceneOptions);
     case 'microscope':
       return buildMicroscopeScene(plugin.sceneOptions);
+    case 'force':
+      return buildForceScene();
+    case 'airtrack':
+      return buildAirtrackScene();
+    case 'molecule':
+      return buildMoleculeScene();
+    case 'cell':
+      return buildCellScene();
+    case 'membrane':
+      return buildMembraneScene();
+    case 'signal':
+      return buildSignalScene();
   }
 }
 

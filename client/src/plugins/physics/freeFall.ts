@@ -1,59 +1,70 @@
 /**
- * Plugin Vật lí 10 — Đo gia tốc rơi tự do (SGK KNTT Vật lí 10, Bài 11).
- * Bộ giải: free-fall. Thông số ẩn g ∈ [9,76; 9,83] m/s² theo từng học sinh.
- * Đại lượng kết quả: g = 2s/t² (trung bình các lần đo).
+ * Plugin Vật lí 10 — Bài 11: Thực hành đo gia tốc rơi tự do.
+ * Bộ giải: free-fall-2gates. Thông số ẩn g theo từng học sinh. Kết quả: g = ḡ ± Δḡ (5 lần đo).
  */
 import type { LabPluginDef } from '../../types/lab';
+import { quiz } from '../pluginHelpers';
 
 export const freeFallPlugin: LabPluginDef = {
   id: 'vl10-gia-toc-roi-tu-do',
-  version: 1,
+  version: 2,
   subject: 'physics',
-  title: 'Đo gia tốc rơi tự do',
-  shortTitle: 'Gia tốc rơi tự do',
-  sgkRef: 'Vật lí 10 – Bài 11: Thực hành đo gia tốc rơi tự do',
+  title: 'Thực hành: Đo gia tốc rơi tự do',
+  shortTitle: 'Bài 11 – Gia tốc rơi tự do',
+  sgkRef: 'Vật lí 10 – Bài 11: Thực hành: Đo gia tốc rơi tự do',
   chapter: 'Chương II. Động học',
   grade: 10,
-  durationMin: 25,
+  durationMin: 35,
   objectives: [
-    'Bố trí được thí nghiệm đo thời gian rơi bằng nam châm điện và cổng quang điện.',
-    'Xác định được gia tốc rơi tự do g = 2s/t².',
-    'Đánh giá sai số và nhận xét kết quả so với giá trị tham khảo 9,8 m/s².'
+    'Bố trí thí nghiệm rơi thẳng đứng với nam châm điện, trụ thép và hai cổng quang điện cách nhau quãng đường s.',
+    'Đo 5 lần, tính gᵢ = 2s/tᵢ², ḡ, sai số từng lần Δgᵢ = |gᵢ − ḡ| và sai số trung bình.',
+    'Viết kết quả g = ḡ ± Δḡ (m/s²), so sánh với 9,8 m/s² và phân tích nguồn sai số.'
   ],
   theory:
-    'Vật rơi tự do không vận tốc đầu chuyển động nhanh dần đều: s = ½·g·t². Ngắt nam châm điện, vật bắt đầu rơi đồng thời đồng hồ bắt đầu đếm; khi vật chắn cổng quang điện cách điểm thả quãng s, đồng hồ dừng. Từ đó g = 2s/t².',
-  equation: 'g = 2s / t²',
+    'Nam châm điện N giữ trụ thép; cổng quang điện E đặt sát đáy trụ để đồng hồ chạy đúng lúc vật bắt đầu rơi (v₀ ≈ 0), cổng F cách E quãng đường s. Vật rơi tự do: s = ½gt² ⇒ g = 2s/t². Nếu đặt E thấp hơn điểm thả thì v₀ ≠ 0, công thức không còn đúng và g tính được lớn hơn thực.',
+  equation: 'gᵢ = 2s / tᵢ² ; g = ḡ ± Δḡ',
   sceneTemplate: 'track',
-  sceneOptions: { orientation: 'vertical', objectLabel: 'Trụ thép', gateLabel: 'Cổng quang điện E', timerMode: 'A↔B' },
-  solverId: 'free-fall',
-  params: [{ key: 's', label: 'Quãng đường rơi s', unit: 'cm', min: 10, max: 80, step: 5, default: 50, description: 'Khoảng cách từ điểm thả đến cổng quang điện' }],
+  sceneOptions: { rig: 'freefall2' },
+  solverId: 'free-fall-2gates',
+  params: [
+    { key: 's', label: 'Quãng đường s giữa hai cổng', unit: 'cm', min: 10, max: 80, step: 5, default: 50 },
+    { key: 'x0', label: 'Cổng E thấp hơn đáy trụ thép', unit: 'mm', min: 0, max: 20, step: 1, default: 0, description: 'Khảo sát sai số hệ thống khi đặt cổng E sai' }
+  ],
   hidden: [{ key: 'g', label: 'Gia tốc rơi tự do', unit: 'm/s²', min: 9.76, max: 9.83, decimals: 3 }],
-  measurements: [{ key: 't', label: 'Thời gian rơi t', unit: 's', decimals: 3 }],
+  measurements: [{ key: 't', label: 'Thời gian t', unit: 's', decimals: 3 }],
+  derived: [
+    { key: 'gi', label: 'gᵢ = 2s/t²', unit: 'm/s²', decimals: 3 },
+    { key: 'dg', label: 'Δgᵢ = |gᵢ − ḡ|', unit: 'm/s²', decimals: 3 }
+  ],
+  charts: [
+    { id: 'g-trial', title: 'gᵢ theo lần đo', kind: 'line', x: 'index', y: 'gi', xLabel: 'Lần đo', yLabel: 'g (m/s²)', refLine: { value: 9.8, label: '9,8' } },
+    { id: 't-s', title: 'Thời gian rơi theo quãng đường', kind: 'scatter', x: 's', y: 't', xLabel: 's (cm)', yLabel: 't (s)' }
+  ],
   minTrials: 5,
-  result: { key: 'g', label: 'Gia tốc rơi tự do g', unit: 'm/s²', tolerancePercent: 1.5, decimals: 2, hint: 'Với mỗi lần đo tính gᵢ = 2sᵢ/tᵢ² (s đổi sang mét) rồi lấy trung bình.' },
+  result: { key: 'g', label: 'Gia tốc rơi tự do ḡ', unit: 'm/s²', tolerancePercent: 1.5, decimals: 2, hint: 'Với mỗi lần đo tính gᵢ = 2s/tᵢ² (s đổi sang mét) rồi lấy trung bình 5 lần.' },
   steps: [
-    { id: 's1', title: 'Gắn cổng quang điện', instruction: 'Kéo cổng quang điện vào giá đỡ trên thước thẳng đứng.', action: 'snap', trigger: 'gate-slot' },
-    { id: 's2', title: 'Hút vật vào nam châm điện', instruction: 'Chạm vào nam châm điện để hút trụ thép ở vị trí thả.', action: 'click', trigger: 'release' },
-    { id: 's3', title: 'Chọn quãng đường s', instruction: 'Dịch cổng quang điện để chọn quãng đường rơi s.', action: 'adjust' },
-    { id: 's4', title: 'Ngắt điện – đo t', instruction: 'Chạm vào trụ thép (hoặc nút Đo) để ngắt nam châm, đọc thời gian rơi.', action: 'measure', trigger: 'ball' },
-    { id: 's5', title: 'Đo lặp & tính g', instruction: 'Đo ít nhất 5 lần (có thể ở nhiều độ cao), tính g và sai số.', action: 'record' }
+    { id: 's1', title: 'Bật đồng hồ MODE A ↔ B', instruction: 'Chạm vào đồng hồ, chọn MODE A ↔ B, thang 0,001 s.', action: 'click', trigger: 'timer' },
+    { id: 's2', title: 'Hút trụ thép vào nam châm N', instruction: 'Chạm vào nam châm điện để giữ trụ thép.', action: 'click', trigger: 'release' },
+    { id: 's3', title: 'Đặt quãng đường s', instruction: 'Kéo cổng F dọc giá (hoặc thanh trượt) để chọn s; giữ cổng E sát đáy trụ (0 mm).', action: 'adjust' },
+    { id: 's4', title: 'Ngắt điện – đọc t', instruction: 'Chạm vào trụ thép (hoặc nút Đo) để thả rơi.', action: 'measure', trigger: 'ball' },
+    { id: 's5', title: 'Đo đủ 5 lần, tính g', instruction: 'Đo 5 lần, đọc bảng gᵢ, Δgᵢ và viết kết quả g = ḡ ± Δḡ.', action: 'record' }
   ],
   ppeRequired: [],
   chemicals: [],
-  incidents: [{ id: 'gate-too-close', title: 'Cổng quang điện quá gần', message: 'Quãng đường < 15 cm khiến thời gian rơi quá ngắn, sai số tương đối rất lớn. Hãy tăng s.', severity: 'warning' }],
+  incidents: [{ id: 'gate-too-close', title: 'Quãng đường rơi quá ngắn', message: 's < 15 cm khiến t rất nhỏ, sai số tỉ đối lớn. Hãy tăng s.', severity: 'warning' }],
   preQuiz: [
-    { id: 'q1', prompt: 'Thả đồng thời viên bi thép và tờ giấy vo tròn chặt cùng cỡ trong không khí, hiện tượng?', options: ['Bi rơi nhanh hơn nhiều', 'Hai vật chạm đất gần như cùng lúc', 'Giấy rơi nhanh hơn', 'Không vật nào rơi'], correctIndex: 1, explanation: 'Khi lực cản không đáng kể, mọi vật rơi với cùng gia tốc g.', misconceptionId: 'phy-heavy-falls-faster' },
-    { id: 'q2', prompt: 'Chuyển động rơi tự do là chuyển động:', options: ['Thẳng đều', 'Thẳng nhanh dần đều', 'Thẳng chậm dần đều', 'Tròn đều'], correctIndex: 1, explanation: 'Gia tốc không đổi bằng g, cùng chiều chuyển động.' },
-    { id: 'q3', prompt: 'Công thức quãng đường rơi tự do không vận tốc đầu:', options: ['s = g·t', 's = ½·g·t²', 's = g/t²', 's = 2g·t²'], correctIndex: 1, explanation: 's = ½·g·t².' }
+    quiz('q1', 'Thả đồng thời viên bi thép và tờ giấy vo tròn chặt cùng cỡ trong không khí:', ['Bi rơi nhanh hơn nhiều', 'Hai vật chạm đất gần như cùng lúc', 'Giấy rơi nhanh hơn', 'Không vật nào rơi'], 1, 'Khi lực cản không đáng kể, mọi vật rơi với cùng gia tốc g.', 'phy-heavy-falls-faster'),
+    quiz('q2', 'Vì sao cổng E phải đặt sát đáy trụ thép?', ['Để vận tốc lúc bắt đầu đo bằng 0', 'Để dễ nhìn', 'Để trụ thép không rơi', 'Để s lớn hơn'], 0, 'Công thức s = ½gt² giả thiết v₀ = 0.'),
+    quiz('q3', 'Công thức quãng đường rơi tự do không vận tốc đầu:', ['s = g·t', 's = ½·g·t²', 's = g/t²', 's = 2g·t²'], 1, 's = ½gt².')
   ],
   postQuiz: [
-    { id: 'p1', prompt: 's = 0,50 m, t = 0,320 s. Gia tốc g đo được ≈', options: ['9,77 m/s²', '3,13 m/s²', '1,56 m/s²', '19,5 m/s²'], correctIndex: 0, explanation: 'g = 2·0,50/0,320² ≈ 9,77 m/s².' },
-    { id: 'p2', prompt: 'Tăng khối lượng trụ thép gấp đôi thì thời gian rơi cùng quãng đường:', options: ['Giảm một nửa', 'Không đổi', 'Tăng gấp đôi', 'Giảm 4 lần'], correctIndex: 1, explanation: 'g không phụ thuộc khối lượng vật.', misconceptionId: 'phy-heavy-falls-faster' },
-    { id: 'p3', prompt: 'Nguyên nhân chính gây sai số hệ thống trong thí nghiệm này là:', options: ['Lực cản không khí và trễ nam châm', 'Màu của vật', 'Nhiệt độ phòng', 'Tên học sinh'], correctIndex: 0, explanation: 'Lực cản và thời gian khử từ của nam châm làm t đo lớn hơn thực tế.' }
+    quiz('p1', 's = 0,50 m, t = 0,320 s. Gia tốc g đo được ≈', ['9,77 m/s²', '3,13 m/s²', '1,56 m/s²', '19,5 m/s²'], 0, 'g = 2·0,50/0,320² ≈ 9,77 m/s².'),
+    quiz('p2', 'Tăng khối lượng trụ thép gấp đôi thì thời gian rơi cùng quãng đường:', ['Giảm một nửa', 'Không đổi', 'Tăng gấp đôi', 'Giảm 4 lần'], 1, 'g không phụ thuộc khối lượng.', 'phy-heavy-falls-faster'),
+    quiz('p3', 'Cổng E đặt thấp hơn điểm thả vài milimét thì g tính theo 2s/t² sẽ:', ['Nhỏ hơn thực', 'Lớn hơn thực', 'Không đổi', 'Bằng 0'], 1, 'Vật đã có vận tốc khi qua E nên t ngắn hơn → g tính được lớn hơn.')
   ],
   meniscusSkill: false,
-  conclusionPrompt: 'Viết kết quả g = ḡ ± Δg và so sánh với giá trị 9,8 m/s².',
-  conclusionKeywords: ['gia tốc', 'sai số', 'khối lượng'],
+  conclusionPrompt: 'Viết kết quả g = ḡ ± Δḡ, so sánh với 9,8 m/s² và nêu nguồn sai số.',
+  conclusionKeywords: ['gia tốc', 'sai số', '9,8'],
   tags: ['rơi tự do', 'nam châm điện', 'cổng quang điện'],
   source: 'builtin'
 };

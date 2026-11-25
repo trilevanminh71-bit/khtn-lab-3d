@@ -34,6 +34,9 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   const settings = useLabStore((s) => s.settings);
   const plugins = useLabStore((s) => s.plugins);
   const sceneNonce = useLabStore((s) => s.sceneNonce);
+  const paused = useLabStore((s) => s.simPaused);
+  const stepNonce = useLabStore((s) => s.simStepNonce);
+  const cameraView = useLabStore((s) => s.cameraView);
 
   // Khởi tạo engine một lần
   useEffect(() => {
@@ -49,6 +52,14 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
         onSnap: (snapId) => {
           const r = useLabStore.getState().triggerInteraction(snapId);
           useLabStore.getState().toast(r.ok ? 'success' : 'warning', r.message);
+        },
+        onSlide: (param, value) => {
+          const s = useLabStore.getState();
+          const def = s.plugin.params.find((x) => x.key === param);
+          if (!def) return;
+          const snapped = Math.round(value / def.step) * def.step;
+          const next = Math.min(def.max, Math.max(def.min, Number(snapped.toFixed(4))));
+          if (next !== s.params[param]) s.setParam(param, next);
         },
         onHover: setHover,
         onPerf: (p) => useLabStore.getState().setPerf(p),
@@ -134,6 +145,18 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   useEffect(() => {
     if (camNonce > 0) engineRef.current?.resetCamera();
   }, [camNonce]);
+
+  useEffect(() => {
+    engineRef.current?.setPaused(paused);
+  }, [paused, sceneNonce, plugin]);
+
+  useEffect(() => {
+    if (stepNonce > 0) engineRef.current?.stepSimulation(0.1);
+  }, [stepNonce]);
+
+  useEffect(() => {
+    if (cameraView.nonce > 0) engineRef.current?.setView(cameraView.kind, cameraView.tag);
+  }, [cameraView]);
 
   // Làm nổi bật dụng cụ của bước hiện tại; nếu bước "snap" được hoàn thành bằng nút, gắn vật tự động
   useEffect(() => {

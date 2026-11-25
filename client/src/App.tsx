@@ -11,6 +11,7 @@ import { LabHUD } from './components/LabHUD';
 import { TutorErrorBoundary } from './components/TutorErrorBoundary';
 import { SafetyPpeBar } from './components/SafetyPpeBar';
 import { FloatingLabTools } from './components/FloatingLabTools';
+import { SimControls } from './components/SimControls';
 import { ConfirmDialogModal } from './components/ConfirmDialogModal';
 import { PinGuardModal } from './components/PinGuardModal';
 import { OnboardingTour } from './components/OnboardingTour';
@@ -33,6 +34,7 @@ const NoCodeLessonWizard = lazy(() => import('./components/NoCodeLessonWizard'))
 const AssetOverrideModal = lazy(() => import('./components/AssetOverrideModal'));
 const TeacherPortal = lazy(() => import('./components/TeacherPortal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const WorksheetModal = lazy(() => import('./components/WorksheetModal'));
 const MeniscusReaderModal = lazy(() => import('./components/MeniscusReaderModal'));
 const AiTutorDrawer = lazy(() => import('./components/AiTutorDrawer'));
 
@@ -163,6 +165,7 @@ export default function App() {
             </div>
           )}
           {khkt && <KhktDemoOverlay />}
+          <SimControls />
           <FloatingLabTools />
         </section>
         <LabHUD />
@@ -183,6 +186,7 @@ export default function App() {
         {modal === 'teacher' && <TeacherPortal />}
         {modal === 'settings' && <SettingsModal />}
         {modal === 'meniscus' && <MeniscusReaderModal />}
+        {modal === 'worksheet' && <WorksheetModal />}
       </Suspense>
 
       {/* Trợ lý AI có Suspense + Error Boundary riêng: lỗi ở đây không được làm sập ứng dụng */}

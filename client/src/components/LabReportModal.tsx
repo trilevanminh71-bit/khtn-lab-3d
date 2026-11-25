@@ -3,7 +3,7 @@
  *  1) Câu hỏi sau thí nghiệm (Post-Quiz) → 2) Chấm điểm chi tiết từng tiêu chí + GIẢI THÍCH LÍ DO TRỪ ĐIỂM
  *  → 3) Khảo sát Likert 5 sao → 4) Nộp: lưu IndexedDB, xếp hàng đồng bộ LAN, sinh MÃ QR < 180 ký tự để GV quét offline.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Printer, Send, Star } from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
@@ -20,6 +20,9 @@ import { soundEngine } from '../audio/soundEngine';
 import { vibrate } from '../utils/haptics';
 import { ModalShell } from './ModalShell';
 import { QuizPanel } from './LabHUD';
+import { TrialTable } from './TrialTable';
+import { ChartGrid } from './DataChart';
+import { printElement } from '../utils/printSheet';
 import type { SubmissionRecord } from '../types/lab';
 
 const LIKERT_QUESTIONS = [
@@ -39,10 +42,14 @@ export default function LabReportModal() {
   const [comment, setComment] = useState('');
   const [done, setDone] = useState(submittedCache.get(`${s.plugin.id}:${s.startedAt}`) ?? null);
   const close = (): void => s.closeModal();
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   const computed = useMemo(() => {
     const solver = getSolver(s.plugin.solverId);
-    const ctx = s.solveContext();
+    // Đại lượng kết quả ứng với thông số của LẦN ĐO CUỐI (không phụ thuộc thanh trượt chỉnh sau khi đo)
+    const last = s.trials[s.trials.length - 1];
+    const base = s.solveContext();
+    const ctx = last ? { ...base, params: last.params } : base;
     const trueValue = solver.trueResult(ctx);
     let dataEstimate = Number.NaN;
     try {
@@ -143,7 +150,7 @@ export default function LabReportModal() {
       wide
       footer={
         <>
-          <button className="btn" onClick={() => window.print()}>
+          <button className="btn" onClick={() => printElement(sheetRef.current, `Phiếu báo cáo – ${s.plugin.shortTitle}`)}>
             <Printer size={16} /> In / Lưu PDF
           </button>
           {!done && (
@@ -154,7 +161,7 @@ export default function LabReportModal() {
         </>
       }
     >
-      <div id="print-report" className="mx-auto max-w-[210mm] space-y-3 bg-white p-4 text-slate-900 sm:p-6">
+      <div ref={sheetRef} id="print-report" className="mx-auto max-w-[210mm] space-y-3 bg-white p-4 text-slate-900 sm:p-6">
         <header className="border-b-2 border-slate-800 pb-2 text-center">
           <p className="text-xs uppercase">{APP_CONFIG.schoolName}</p>
           <h1 className="text-lg font-bold uppercase">Phiếu báo cáo thí nghiệm {SUBJECT_LABELS[s.plugin.subject]} 10</h1>
@@ -169,24 +176,10 @@ export default function LabReportModal() {
         </section>
         <section>
           <h2 className="font-bold">1. Bảng số liệu ({s.trials.length} lần đo)</h2>
-          <table className="mt-1 w-full border-collapse text-xs">
-            <thead>
-              <tr>
-                <th className="border border-slate-400 p-1">Lần</th>
-                {s.plugin.params.map((p) => <th key={p.key} className="border border-slate-400 p-1">{p.label} ({p.unit || '–'})</th>)}
-                {s.plugin.measurements.map((m) => <th key={m.key} className="border border-slate-400 p-1">{m.label} ({m.unit || '–'})</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {s.trials.map((t) => (
-                <tr key={t.index}>
-                  <td className="border border-slate-400 p-1 text-center">{t.index}</td>
-                  {s.plugin.params.map((p) => <td key={p.key} className="border border-slate-400 p-1 text-center">{fmtVi(t.params[p.key], 3)}</td>)}
-                  {s.plugin.measurements.map((m) => <td key={m.key} className="border border-slate-400 p-1 text-center">{fmtVi(t.values[m.key], m.decimals)}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TrialTable plugin={s.plugin} trials={s.trials} print />
+          <div className="mt-2">
+            <ChartGrid plugin={s.plugin} trials={s.trials} mode="print" />
+          </div>
         </section>
         <section className="text-sm">
           <h2 className="font-bold">2. Kết quả & kết luận</h2>

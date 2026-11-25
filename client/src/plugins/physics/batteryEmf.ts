@@ -39,6 +39,7 @@ export const batteryEmfPlugin: LabPluginDef = {
     { key: 'I', label: 'Cường độ dòng điện I', unit: 'A', decimals: 3 },
     { key: 'U', label: 'Hiệu điện thế U', unit: 'V', decimals: 3 }
   ],
+  charts: [{ id: 'U-I', title: 'Đồ thị U theo I', kind: 'scatter', x: 'I', y: 'U', xLabel: 'I (A)', yLabel: 'U (V)' }],
   minTrials: 5,
   result: { key: 'r', label: 'Điện trở trong r của pin', unit: 'Ω', tolerancePercent: 6, decimals: 2, hint: 'Đo ở ≥ 5 giá trị R khác nhau, vẽ U theo I; r = −ΔU/ΔI (hồi quy tuyến tính).' },
   steps: [

@@ -1,6 +1,6 @@
 /**
  * Plugin Sinh học 10 — Quan sát tế bào nhân sơ và tế bào nhân thực dưới kính hiển vi
- * (SGK KNTT Sinh học 10, Bài 10: Thực hành quan sát tế bào).
+ * (SGK KNTT Sinh học 10, Bài 9: Thực hành: Quan sát tế bào).
  * Bộ giải: cell-microscope. Thông số ẩn: L (chiều dài tế bào biểu bì hành, µm), focusBest (vị trí nét).
  */
 import type { LabPluginDef } from '../../types/lab';
@@ -10,8 +10,8 @@ export const cellObservationPlugin: LabPluginDef = {
   version: 1,
   subject: 'biology',
   title: 'Quan sát tế bào nhân sơ và tế bào nhân thực dưới kính hiển vi',
-  shortTitle: 'Tế bào nhân sơ – nhân thực',
-  sgkRef: 'Sinh học 10 – Bài 10: Thực hành quan sát tế bào',
+  shortTitle: 'Bài 9 – Quan sát tế bào',
+  sgkRef: 'Sinh học 10 – Bài 9: Thực hành: Quan sát tế bào',
   chapter: 'Phần hai. Chương 2: Cấu trúc tế bào',
   grade: 10,
   durationMin: 30,
@@ -40,8 +40,13 @@ export const cellObservationPlugin: LabPluginDef = {
     { key: 'cheek', label: 'Đường kính tế bào niêm mạc', unit: 'µm', min: 50, max: 70, decimals: 0 }
   ],
   measurements: [
-    { key: 'image', label: 'Kích thước ảnh đo trên thước', unit: 'mm', decimals: 2 },
+    { key: 'image', label: 'Kích thước đo', unit: 'mm', decimals: 2 },
     { key: 'mag', label: 'Độ phóng đại K', unit: '×', decimals: 0 }
+  ],
+  derived: [{ key: 'size', label: 'Kích thước ước tính', unit: 'µm', decimals: 1, expr: 'image * 1000 / mag' }],
+  charts: [
+    { id: 'size', title: 'Kích thước ước tính theo mẫu vật', kind: 'bar', x: 'specimen', y: 'size', xLabel: 'Mẫu vật (0: sữa chua · 1: vảy hành · 2: niêm mạc)', yLabel: 'Kích thước (µm)' },
+    { id: 'mag', title: 'Kích thước ảnh theo độ phóng đại', kind: 'scatter', x: 'mag', y: 'image', xLabel: 'Độ phóng đại K', yLabel: 'Kích thước đo (mm)', groupBy: 'specimen' }
   ],
   minTrials: 3,
   result: { key: 'L', label: 'Chiều dài thật của tế bào biểu bì vảy hành', unit: 'µm', tolerancePercent: 6, decimals: 0, hint: 'Chỉ dùng các lần đo mẫu vảy hành: L = ảnh(mm)·1000/K, lấy trung bình; nên lấy nét rõ trước khi đo.' },

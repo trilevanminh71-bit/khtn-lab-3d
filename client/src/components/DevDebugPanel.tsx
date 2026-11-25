@@ -16,7 +16,8 @@ export function DevDebugPanel() {
   let truth = Number.NaN;
   let est = Number.NaN;
   try {
-    const ctx = s.solveContext();
+    const last = s.trials[s.trials.length - 1];
+    const ctx = last ? { ...s.solveContext(), params: last.params } : s.solveContext();
     truth = solver.trueResult(ctx);
     est = solver.estimateFromTrials(s.trials, ctx);
   } catch {

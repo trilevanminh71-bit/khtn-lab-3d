@@ -6,9 +6,12 @@
 import type { LabSolver, SolveContext, TrialComputation, TrialRecord } from '../types/lab';
 import { gaussian, roundTo } from '../utils/randomizer';
 import { biologySolvers } from './biology/biologySolver';
+import { conceptBiologySolvers } from './biology/conceptSolver';
+import { conceptChemistrySolvers } from './chemistry/conceptSolver';
 import { chemistrySolvers } from './chemistry/chemistrySolver';
 import { evaluateFormula } from './formulaEvaluator';
 import { physicsSolvers } from './physics/physicsSolver';
+import { practicalPhysicsSolvers } from './physics/practicalSolver';
 import { mean } from './statistics';
 
 /** Bảng biến cho biểu thức = tham số chỉnh + thông số ẩn */
@@ -59,7 +62,8 @@ export const customFormulaSolver: LabSolver = {
   }
 };
 
-export const ALL_SOLVERS: LabSolver[] = [...physicsSolvers, ...chemistrySolvers, ...biologySolvers, customFormulaSolver];
+/** Bộ giải cũ (photogate-speed, free-fall, enthalpy-zn-cuso4, mitosis-index) vẫn được giữ cho các bản sửa CMS đã lưu trước đây */
+export const ALL_SOLVERS: LabSolver[] = [...physicsSolvers, ...practicalPhysicsSolvers, ...chemistrySolvers, ...conceptChemistrySolvers, ...biologySolvers, ...conceptBiologySolvers, customFormulaSolver];
 
 const MAP = new Map(ALL_SOLVERS.map((s) => [s.id, s]));
 

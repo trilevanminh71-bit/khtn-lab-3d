@@ -11,7 +11,7 @@ export const h2o2CatalystPlugin: LabPluginDef = {
   version: 1,
   subject: 'chemistry',
   title: 'Ảnh hưởng của chất xúc tác đến tốc độ phân hủy hydrogen peroxide',
-  shortTitle: 'Xúc tác – H₂O₂',
+  shortTitle: 'Bài 19 – Chất xúc tác',
   sgkRef: 'Hóa học 10 – Bài 19: Tốc độ phản ứng (yếu tố chất xúc tác)',
   chapter: 'Chương 6. Tốc độ phản ứng',
   grade: 10,
@@ -34,6 +34,7 @@ export const h2o2CatalystPlugin: LabPluginDef = {
   ],
   hidden: [{ key: 'C', label: 'Nồng độ H₂O₂', unit: 'mol/L', min: 0.5, max: 0.9, decimals: 3 }],
   measurements: [{ key: 'VO2', label: 'Thể tích O₂ thu được', unit: 'mL', decimals: 1 }],
+  charts: [{ id: 'V-t', title: 'Thể tích O₂ theo thời gian', kind: 'scatter', x: 'time', y: 'VO2', xLabel: 't (s)', yLabel: 'V (mL)', groupBy: 'catalyst' }],
   minTrials: 3,
   result: { key: 'C', label: 'Nồng độ H₂O₂ ban đầu', unit: 'mol/L', tolerancePercent: 4, decimals: 3, hint: 'Dùng MnO₂, thu khí đủ lâu (≥ 120 s) đến khi V(O₂) không tăng: C = 2·V(O₂)/(24 790·V) với V theo lít.' },
   steps: [

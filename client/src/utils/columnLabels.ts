@@ -11,14 +11,42 @@ const COLUMN_LABELS: Record<string, string> = {
   eyepiece: 'Thị kính',
   focus: 'Ốc vi cấp',
   oil: 'Dầu soi',
+  sample: 'Mẫu',
+  fix: 'Thời gian cố định',
+  part: 'Cấu trúc',
+  gram: 'Nhóm Gram',
+  process: 'Phương thức',
+  cell: 'Tế bào',
+  Cout: 'C ngoài',
+  target: 'Tế bào nhận',
+  stage: 'Giai đoạn',
+  enzyme: 'Enzyme',
+  cond: 'Điều kiện',
+  culture: 'Nuôi cấy',
+  anti: 'Kháng sinh',
+  factor: 'Nhân tố sinh trưởng',
+  repro: 'Sinh sản',
   field: 'Vi trường',
   stain: 'Thời gian nhuộm',
+  // Vật lí
+  mode: 'Chế độ',
+  scale: 'Thang đo',
+  angle: 'Góc nghiêng',
+  alpha: 'Góc α',
+  type: 'Loại va chạm',
   // Dùng chung Hóa học – Sinh học
   time: 'Thời gian',
   // Hóa học
   catalyst: 'Xúc tác',
   acid: 'V(H₂SO₄)',
-  added: 'V(KMnO₄) đã nhỏ'
+  added: 'V(KMnO₄) đã nhỏ',
+  mol: 'Phân tử',
+  rxn: 'Phản ứng',
+  system: 'Hệ phản ứng',
+  area: 'Kích thước hạt',
+  cat: 'Xúc tác',
+  dt: 'Δt',
+  element: 'Halogen tra cứu'
 };
 
 /** Kí hiệu đại lượng: 1–2 chữ cái, có thể kèm một chữ số (h, F, R0, Va, pH) */

@@ -1,6 +1,6 @@
 /**
  * plugins/pluginRegistry.ts — Nạp động danh mục bài thí nghiệm.
- *  - 12 bài mặc định (4 Lý, 4 Hóa, 4 Sinh) đóng gói sẵn → luôn chạy offline.
+ *  - 23 bài mặc định (Vật lí, Hóa học, Sinh học 10) đóng gói sẵn → luôn chạy offline.
  *  - Bài tùy biến từ IndexedDB (CMS sửa đề, No-Code Wizard, gói Remote JSON) → ghi đè bài mặc định cùng id.
  *  - 5 template khởi tạo cho No-Code Wizard.
  * Thứ tự BUILTIN_PLUGINS KHÔNG ĐƯỢC ĐỔI vì chỉ số được mã hóa trong mã QR nộp bài.
@@ -20,6 +20,10 @@ import { cellObservationPlugin } from './biology/cellObservation';
 import { plasmolysisPlugin } from './biology/plasmolysis';
 import { enzymeAmylasePlugin } from './biology/enzymeAmylase';
 import { mitosisIndexPlugin } from './biology/mitosisIndex';
+import { forceCompositionPlugin } from './physics/forceComposition';
+import { momentumCollisionPlugin } from './physics/momentumCollision';
+import { covalentBondPlugin, halogenPlugin, rateFactorsPlugin, redoxBalancePlugin } from './chemistry/conceptPlugins';
+import { cellSignalPlugin, enzymeConditionsPlugin, membraneTransportPlugin, microbeGrowthPlugin, prokaryotePlugin } from './biology/conceptPlugins';
 
 export const BUILTIN_PLUGINS: LabPluginDef[] = [
   photogateSpeedPlugin,
@@ -33,8 +37,23 @@ export const BUILTIN_PLUGINS: LabPluginDef[] = [
   cellObservationPlugin,
   plasmolysisPlugin,
   enzymeAmylasePlugin,
-  mitosisIndexPlugin
+  mitosisIndexPlugin,
+  // Bài mở rộng: CHỈ thêm vào cuối danh sách
+  forceCompositionPlugin,
+  momentumCollisionPlugin,
+  covalentBondPlugin,
+  redoxBalancePlugin,
+  rateFactorsPlugin,
+  halogenPlugin,
+  prokaryotePlugin,
+  membraneTransportPlugin,
+  cellSignalPlugin,
+  enzymeConditionsPlugin,
+  microbeGrowthPlugin
 ];
+
+/** Chỉ số QR bắt đầu của bài tự tạo — tách hẳn khỏi bài mặc định để thêm bài mới không làm lệch mã */
+export const CUSTOM_INDEX_BASE = 500;
 
 /** Gộp bài mặc định với bài tùy biến (bài tùy biến hợp lệ ghi đè theo id) */
 export function mergePlugins(custom: LabPluginDef[]): LabPluginDef[] {
@@ -46,7 +65,7 @@ export function mergePlugins(custom: LabPluginDef[]): LabPluginDef[] {
   return [...map.values()];
 }
 
-/** Chỉ số bài để mã hóa vào QR: bài mặc định 0–11, bài tự tạo 12+ theo thứ tự id */
+/** Chỉ số bài để mã hóa vào QR: bài mặc định theo thứ tự danh sách, bài tự tạo từ CUSTOM_INDEX_BASE theo thứ tự id */
 export function pluginIndexOf(id: string, all: LabPluginDef[]): number {
   const b = BUILTIN_PLUGINS.findIndex((p) => p.id === id);
   if (b >= 0) return b;
@@ -55,7 +74,7 @@ export function pluginIndexOf(id: string, all: LabPluginDef[]): number {
     .map((p) => p.id)
     .sort();
   const c = customIds.indexOf(id);
-  return c >= 0 ? BUILTIN_PLUGINS.length + c : 99;
+  return c >= 0 ? CUSTOM_INDEX_BASE + c : 99;
 }
 
 export function pluginByIndex(index: number, all: LabPluginDef[]): LabPluginDef | undefined {
@@ -64,13 +83,15 @@ export function pluginByIndex(index: number, all: LabPluginDef[]): LabPluginDef 
     .filter((p) => !BUILTIN_PLUGINS.some((x) => x.id === p.id))
     .map((p) => p.id)
     .sort();
-  const id = customIds[index - BUILTIN_PLUGINS.length];
+  const id = customIds[index - CUSTOM_INDEX_BASE];
   return all.find((p) => p.id === id);
 }
 
 /** Mô tả 5 template 3D dùng cho No-Code Wizard */
+export type WizardSceneId = Extract<SceneTemplateId, 'track' | 'circuit' | 'beaker' | 'titration' | 'microscope'>;
+
 export interface WizardTemplate {
-  id: SceneTemplateId;
+  id: WizardSceneId;
   name: string;
   description: string;
   subject: SubjectId;

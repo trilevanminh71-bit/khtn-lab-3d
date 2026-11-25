@@ -60,6 +60,11 @@ Thẻ tương tác (`trigger`) có sẵn theo template:
 - `beaker`: `beaker-slot` (snap), `reagent-a`, `reagent-b`, `catalyst`, `water-bath`
 - `titration`: `flask-slot` (snap), `stopcock`, `acid-bottle`
 - `microscope`: `stage-slot` (snap), `light`, `fine-knob`, `coarse-knob`, `objective-turret`, `dropper`
+- `track` với `sceneOptions.rig: 'mc964'` (Bài 6) hoặc `'freefall2'` (Bài 11): `timer`, `release`, `ball`; cổng quang điện trượt được (`userData.slide`)
+- `force`: `scale-slot` (snap), `ring`, `board` · `airtrack`: `gate-slot` (snap), `pump`, `launcher`
+- `molecule`: `atom`, `molecule` · `cell`: `cell`, `part-*` · `membrane`: `membrane`, `cell` · `signal`: `sender`, `cell`
+
+Trường tùy chọn của bài: `params[].options` (nút chọn), `showIf` (hiện theo chế độ), `derived` (cột tự tính, `expr` hoặc `solver.derive`), `charts` (biểu đồ), `measurements[].valueLabels` (chữ thay mã số). Bộ giải có thể thêm `summarize` (xử lí số liệu) và `insight` (giải thích). Đổi thông số của bài → tăng `version` để nháp cũ không bị nạp nhầm.
 
 ## 5. Báo lỗi
 Mở web với `?debug=true` → bảng Debug → **Xuất Bug Snapshot** → đính kèm file JSON vào issue.

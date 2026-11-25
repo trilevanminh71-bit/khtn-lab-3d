@@ -14,7 +14,9 @@
 | Giao diện | `client/src/components/` | React + Tailwind, modal lớn dùng `React.lazy` |
 
 - Liên kết plugin ↔ công thức qua `solverId` (xem `engines/solverRegistry.ts`).
-- Liên kết plugin ↔ cảnh 3D qua `sceneTemplate` ∈ `track | circuit | beaker | titration | microscope` (5 template).
+- Liên kết plugin ↔ cảnh 3D qua `sceneTemplate`: 5 template dùng cho Wizard (`track | circuit | beaker | titration | microscope`) + template chuyên biệt (`force | airtrack | molecule | cell | membrane | signal`; `track` có `sceneOptions.rig` = `mc964` / `freefall2`).
+- 23 bài mặc định; thứ tự `BUILTIN_PLUGINS` mã hóa trong QR → chỉ thêm vào cuối; bài tự tạo bắt đầu từ `CUSTOM_INDEX_BASE = 500`. Ngộ nhận tối đa 31 mục (mặt nạ bit), chỉ thêm cuối.
+- Bảng số liệu/biểu đồ/phiếu in dùng chung `utils/trialTable.ts`, `components/TrialTable.tsx`, `DataChart.tsx`, `WorksheetModal.tsx`. Đổi thông số bài → tăng `version` (nháp cũ bị bỏ qua).
 - Bài tạo bằng No-Code Wizard dùng `solverId: "custom-formula"` + biểu thức an toàn (`engines/formulaEvaluator.ts`, không dùng `eval`).
 - Backend: FastAPI + SQLAlchemy async. `DATABASE_URL` (Neon PostgreSQL → `postgresql+asyncpg`) hoặc fallback `sqlite+aiosqlite:///./local_lab.db`.
   - Ghi chú: thêm `asyncpg` vào requirements vì `psycopg2` không hỗ trợ async (psycopg2-binary vẫn giữ cho công cụ quản trị/migration).
@@ -42,6 +44,8 @@ Backend: fastapi, uvicorn[standard], sqlalchemy[asyncio] (kèm greenlet — bắ
 
 - Engine dev: `window.__khtnEngine` (chỉ khi `import.meta.env.DEV`) để kiểm tra cảnh 3D từ DevTools.
 - Trình duyệt nhúng của Claude desktop chặn Service Worker → kiểm tra PWA/offline bằng Chrome/Edge thật.
+- `useEffect` phải có thân `{ }`: Chrome mới cho `scrollIntoView` trả Promise, trả ra làm cleanup sẽ sập trang.
+- Thử trong trình duyệt bằng `import('/src/store/...')` sau khi sửa file có thể lấy bản store khác (HMR `?t=`) → khởi động lại dev server trước.
 - Heredoc dài trong Bash tool có thể lỗi phân tích cú pháp → dùng Write tool để tạo file.
 
 ## 5. Checklist tiến độ
@@ -75,6 +79,10 @@ Backend: fastapi, uvicorn[standard], sqlalchemy[asyncio] (kèm greenlet — bắ
 ### Pha 5 — Tài liệu & Đóng gói
 - [x] README, CONTRIBUTING, .github/PULL_REQUEST_TEMPLATE.md, docs/* (5 file), .gitignore
 - [x] start.bat/.sh, build-offline-usb.bat/.sh (+ usb-kit)
+
+### Pha 7 — Nâng cấp học liệu (23 bài)
+- [x] practicalSolver, conceptSolver (Hóa, Sinh), redox; cảnh 3D mới; 11 bài thêm + 4 bài nâng cấp
+- [x] SimControls, góc nhìn theo bước, nguyên tắc, thẻ làm tiếp, DataChart, WorksheetModal
 
 ### Pha 6 — Kiểm thử
 - [x] tsc --noEmit, vitest, vite build, py_compile — exit code 0

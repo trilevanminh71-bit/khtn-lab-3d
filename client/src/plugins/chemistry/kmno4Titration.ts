@@ -11,7 +11,7 @@ export const kmno4TitrationPlugin: LabPluginDef = {
   version: 1,
   subject: 'chemistry',
   title: 'Chuẩn độ dung dịch iron(II) sulfate bằng potassium permanganate',
-  shortTitle: 'Chuẩn độ KMnO₄',
+  shortTitle: 'Bài 15 – Chuẩn độ KMnO₄',
   sgkRef: 'Hóa học 10 – Bài 15: Phản ứng oxi hóa – khử và ứng dụng trong cuộc sống',
   chapter: 'Chương 4. Phản ứng oxi hóa – khử',
   grade: 10,
@@ -36,6 +36,7 @@ export const kmno4TitrationPlugin: LabPluginDef = {
     { key: 'Vread', label: 'Số đọc burette', unit: 'mL', decimals: 2 },
     { key: 'endpoint', label: 'Hồng bền (1 = có)', unit: '', decimals: 0 }
   ],
+  charts: [{ id: 'V', title: 'Số đọc burette theo lần chuẩn độ', kind: 'line', x: 'index', y: 'Vread', xLabel: 'Lần', yLabel: 'V (mL)' }],
   minTrials: 3,
   result: { key: 'cFe', label: 'Nồng độ Fe²⁺ trong dung dịch FeSO₄', unit: 'mol/L', tolerancePercent: 2, decimals: 4, hint: 'Lấy trung bình V(KMnO₄) của các lần đạt điểm cuối: C(Fe²⁺) = 5·0,02·V̄/10,00.' },
   steps: [

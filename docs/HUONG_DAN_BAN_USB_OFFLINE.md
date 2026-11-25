@@ -5,7 +5,7 @@
 build-offline-usb.bat      # Windows
 ./build-offline-usb.sh     # macOS / Linux
 ```
-Kết quả: thư mục `KHTN-Lab-USB/` (khoảng 1,4 MB):
+Kết quả: thư mục `KHTN-Lab-USB/` (khoảng 1,7 MB):
 ```
 KHTN-Lab-USB/
 ├── web/                  # Ứng dụng đã build (đường dẫn tương đối ./)

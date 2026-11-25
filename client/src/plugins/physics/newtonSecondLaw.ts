@@ -10,7 +10,7 @@ export const newtonSecondLawPlugin: LabPluginDef = {
   version: 1,
   subject: 'physics',
   title: 'Định luật II Newton — Xác định khối lượng xe trượt trên đệm khí',
-  shortTitle: 'Định luật II Newton',
+  shortTitle: 'Bài 15 – Định luật 2 Newton',
   sgkRef: 'Vật lí 10 – Bài 15: Định luật 2 Newton',
   chapter: 'Chương III. Động lực học',
   grade: 10,
@@ -33,6 +33,8 @@ export const newtonSecondLawPlugin: LabPluginDef = {
   ],
   hidden: [{ key: 'M', label: 'Khối lượng xe trượt', unit: 'kg', min: 0.35, max: 0.65, decimals: 3 }],
   measurements: [{ key: 't', label: 'Thời gian đi hết s', unit: 's', decimals: 3 }],
+  derived: [{ key: 'a', label: 'Gia tốc a', unit: 'm/s²', decimals: 3, expr: '2 * s / 100 / t ^ 2' }],
+  charts: [{ id: 'a-F', title: 'Gia tốc theo lực kéo', kind: 'scatter', x: 'F', y: 'a', xLabel: 'F (N)', yLabel: 'a (m/s²)' }, { id: 't-s', title: 'Thời gian theo quãng đường', kind: 'scatter', x: 's', y: 't', xLabel: 's (cm)', yLabel: 't (s)' }],
   minTrials: 4,
   result: { key: 'M', label: 'Khối lượng xe trượt M', unit: 'kg', tolerancePercent: 3, decimals: 3, hint: 'Mỗi lần đo: a = 2s/t² (s theo mét), M = F/a − m (m theo kg), rồi lấy trung bình.' },
   steps: [

@@ -4,7 +4,7 @@
  *
  * Kĩ thuật: sơ đồ Voronoi (mỗi ô = 1 tế bào) + hàm khoảng cách (SDF) cho vi khuẩn hình que, nhân, nhiễm sắc thể.
  * Uniform:
- *  - uSpec   : 0 vi khuẩn sữa chua · 1 biểu bì hành · 2 niêm mạc miệng · 3 co nguyên sinh · 4 đỉnh rễ hành
+ *  - uSpec   : 0 vi khuẩn sữa chua · 1 biểu bì hành · 2 niêm mạc miệng · 3 co nguyên sinh · 4 đỉnh rễ hành · 5 ống sinh tinh châu chấu
  *  - uFov    : đường kính thị trường (µm) = 180 000 / độ phóng đại (số trường 18 mm)
  *  - uBlur   : 0 nét → 1 mờ (lệch tiêu cự)
  *  - uProto  : tỉ lệ tế bào co nguyên sinh (0..1)
@@ -129,6 +129,28 @@ vec3 specimen(vec2 c, float soft) {
     float nucleus = 1.0 - smoothstep(0.09, 0.09 + soft * 3.0, v.x);
     return mix(col, vec3(0.2, 0.3, 0.7) * (0.7 + 0.3 * uStain), nucleus * present);
   }
+  if (uSpec > 4.5) {
+    // Ống sinh tinh châu chấu: tế bào tròn (~30 µm), một phần đang giảm phân
+    vec2 pm = c * uFov / 30.0;
+    vec4 vm = voronoi(pm, 0.25);
+    vec2 lm = fract(pm) - 0.5;
+    float body = 1.0 - smoothstep(0.36, 0.38 + soft * 3.0, vm.x);
+    vec3 cm = mix(vec3(0.95, 0.91, 0.88), vec3(0.97, 0.83, 0.8), body);
+    vec3 red = vec3(0.6, 0.05, 0.12) * (0.5 + 0.6 * uStain);
+    vec2 ax = vec2(cos(vm.w), sin(vm.w));
+    float al = dot(lm, ax);
+    float ac = dot(lm, vec2(-ax.y, ax.x));
+    float ph = fract(vm.z * 41.0);
+    float mk = 0.0;
+    if (vm.z < uMI) {
+      if (ph < 0.4) mk = (1.0 - smoothstep(0.2, 0.22, vm.x)) * step(0.35, fract(sin(dot(floor(lm * 26.0), vec2(5.3, 9.1))) * 733.0)); // kì đầu I
+      else if (ph < 0.55) mk = (1.0 - smoothstep(0.02, 0.035, abs(abs(al) - 0.05))) * (1.0 - smoothstep(0.18, 0.2, abs(ac))); // kì giữa I: hai hàng
+      else if (ph < 0.65) mk = (1.0 - smoothstep(0.035, 0.05, abs(abs(al) - 0.18))) * (1.0 - smoothstep(0.14, 0.16, abs(ac))); // kì sau I
+      else if (ph < 0.75) mk = 1.0 - smoothstep(0.08, 0.1, min(length(lm - ax * 0.18), length(lm + ax * 0.18))); // kì cuối I
+      else mk = 1.0 - smoothstep(0.05, 0.065, min(min(length(lm - vec2(0.14, 0.14)), length(lm - vec2(-0.14, 0.14))), min(length(lm - vec2(0.14, -0.14)), length(lm + vec2(0.14, 0.14))))); // giảm phân II
+    } else mk = (1.0 - smoothstep(0.15, 0.17, vm.x)) * 0.5;
+    return mix(cm, red, clamp(mk, 0.0, 1.0) * (0.6 + 0.4 * uStain));
+  }
   // Đỉnh rễ hành: tế bào vuông nhỏ (~25 µm) xếp sít; một phần đang nguyên phân
   vec2 p = c * uFov / 25.0;
   vec4 v = voronoi(p, 0.2);
@@ -227,6 +249,8 @@ export function specimenCode(name: string): number {
       return 3;
     case 'root-tip':
       return 4;
+    case 'meiosis':
+      return 5;
     default:
       return 1;
   }

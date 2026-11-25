@@ -11,8 +11,8 @@ export const enzymeAmylasePlugin: LabPluginDef = {
   version: 1,
   subject: 'biology',
   title: 'Ảnh hưởng của nhiệt độ và pH đến hoạt tính của enzyme amylase',
-  shortTitle: 'Enzyme amylase',
-  sgkRef: 'Sinh học 10 – Chương 4: Enzyme (Thực hành một số thí nghiệm về enzyme)',
+  shortTitle: 'Bài 15 – Amylase: nhiệt độ, pH',
+  sgkRef: 'Sinh học 10 – Bài 15: Thực hành về enzyme (khảo sát nhiệt độ, pH)',
   chapter: 'Chương 4: Chuyển hóa năng lượng và enzyme',
   grade: 10,
   durationMin: 30,
@@ -37,6 +37,7 @@ export const enzymeAmylasePlugin: LabPluginDef = {
     { key: 't0', label: 'Thời gian thủy phân tối thiểu', unit: 'phút', min: 2.5, max: 3.5, decimals: 2 }
   ],
   measurements: [{ key: 't', label: 'Thời gian mất màu xanh tím', unit: 'phút', decimals: 1 }],
+  charts: [{ id: 't-T', title: 'Thời gian thủy phân theo nhiệt độ', kind: 'scatter', x: 'T', y: 't', xLabel: 'T (°C)', yLabel: 't (phút)' }],
   minTrials: 5,
   result: { key: 'tOpt', label: 'Nhiệt độ tối ưu của amylase', unit: '°C', tolerancePercent: 6, decimals: 0, hint: 'Giữ pH = 7, đo ở ≥ 5 nhiệt độ; nhiệt độ có thời gian ngắn nhất (đỉnh đồ thị 1/t) là nhiệt độ tối ưu.' },
   steps: [

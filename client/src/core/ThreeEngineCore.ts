@@ -12,11 +12,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { PerfStats } from '../types/lab';
-import type { SceneHandle, SnapPoint } from '../engines/sceneKit';
+import type { SceneHandle, SlideSpec, SnapPoint } from '../engines/sceneKit';
 
 export interface EngineCallbacks {
   onInteract(tag: string, label: string): void;
   onSnap(snapId: string, tag: string): void;
+  /** Vật trượt theo trục (cổng quang điện…) → giá trị tham số mới */
+  onSlide(param: string, value: number): void;
   onHover(label: string | null): void;
   onPerf(stats: PerfStats): void;
   onQualityChange(level: number): void;
@@ -64,6 +66,9 @@ export class ThreeEngineCore {
   private drag: { obj: THREE.Object3D; plane: THREE.Plane; origin: THREE.Vector3; offset: THREE.Vector3 } | null = null;
   private down: { x: number; y: number; t: number; hit: THREE.Object3D | null } | null = null;
   private hovered: THREE.Object3D | null = null;
+  private slide: { obj: THREE.Object3D; spec: SlideSpec; moved: boolean } | null = null;
+  private paused = false;
+  private pendingStep = 0;
 
   constructor(
     private readonly container: HTMLElement,
@@ -169,7 +174,63 @@ export class ThreeEngineCore {
       this.camTween = null;
       return;
     }
-    this.camTween = { from: this.camera.position.clone(), to: h.cameraPosition.clone(), tFrom: this.controls.target.clone(), tTo: h.cameraTarget.clone(), t: 0 };
+    this.flyTo(h.cameraPosition, h.cameraTarget);
+  }
+
+  private flyTo(position: THREE.Vector3, target: THREE.Vector3): void {
+    this.camTween = { from: this.camera.position.clone(), to: position.clone(), tFrom: this.controls.target.clone(), tTo: target.clone(), t: 0 };
+  }
+
+  /** Góc nhìn chuẩn; 'step' = cận cảnh dụng cụ (thẻ tag hoặc điểm gắn) của một bước thí nghiệm */
+  setView(kind: 'overview' | 'front' | 'top' | 'side' | 'step', tag: string | null): void {
+    const h = this.main?.handle;
+    if (!h) return;
+    if (kind === 'overview') {
+      this.resetCamera();
+      return;
+    }
+    if (kind === 'step' && tag) {
+      const bounds = new THREE.Box3();
+      const snap = h.snapPoints.find((s) => s.id === tag);
+      for (const o of h.interactive) if (o.userData.tag === tag || (snap && o.userData.tag === snap.accepts)) bounds.expandByObject(o);
+      if (snap) bounds.expandByPoint(snap.position);
+      if (bounds.isEmpty()) {
+        this.resetCamera();
+        return;
+      }
+      const center = bounds.getCenter(new THREE.Vector3());
+      const radius = Math.max(0.25, bounds.getSize(new THREE.Vector3()).length() / 2);
+      const dir = h.cameraPosition.clone().sub(h.cameraTarget).normalize();
+      this.flyTo(center.clone().addScaledVector(dir, Math.max(0.9, radius * 2.6)), center);
+      return;
+    }
+    const dist = h.cameraPosition.distanceTo(h.cameraTarget);
+    const offset = kind === 'top' ? new THREE.Vector3(0, 1, 0.12) : kind === 'side' ? new THREE.Vector3(1, 0.18, 0.05) : new THREE.Vector3(0, 0.12, 1);
+    this.flyTo(h.cameraTarget.clone().addScaledVector(offset.normalize(), dist), h.cameraTarget);
+  }
+
+  /** Tạm dừng / chạy tiếp hoạt cảnh (camera và thao tác vẫn hoạt động) */
+  setPaused(on: boolean): void {
+    this.paused = on;
+  }
+  /** Tiến hoạt cảnh thêm `seconds` giây khi đang tạm dừng */
+  stepSimulation(seconds: number): void {
+    this.pendingStep += seconds;
+  }
+
+  /** Giá trị tham số ứng với vị trí con trỏ trên trục trượt */
+  private slideValue(obj: THREE.Object3D, spec: SlideSpec): number {
+    const parent = obj.parent;
+    const a = spec.start.clone();
+    const b = spec.end.clone();
+    if (parent) {
+      parent.updateWorldMatrix(true, false);
+      parent.localToWorld(a);
+      parent.localToWorld(b);
+    }
+    const onAxis = new THREE.Vector3();
+    this.raycaster.ray.distanceSqToSegment(a, b, undefined, onAxis);
+    return spec.min + (spec.max - spec.min) * (a.distanceTo(onAxis) / Math.max(1e-6, a.distanceTo(b)));
   }
 
   setHighlightTag(tag: string | null): void {
@@ -251,6 +312,12 @@ export class ThreeEngineCore {
     if (!this.setPointer(e)) return;
     const hit = this.pick();
     this.down = { x: e.clientX, y: e.clientY, t: performance.now(), hit };
+    if (hit && hit.userData.slide) {
+      this.slide = { obj: hit, spec: hit.userData.slide as SlideSpec, moved: false };
+      this.controls.enabled = false;
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+      return;
+    }
     if (hit && hit.userData.draggable) {
       const snapped = this.main?.handle.snapPoints.find((s) => s.filled && s.accepts === hit.userData.tag);
       if (snapped) return; // đã gắn rồi thì không kéo ra nữa
@@ -265,6 +332,13 @@ export class ThreeEngineCore {
 
   private onPointerMove = (e: PointerEvent): void => {
     if (!this.setPointer(e)) return;
+    if (this.slide) {
+      if (this.down && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 4 && !this.slide.moved) return;
+      this.slide.moved = true;
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      this.cb.onSlide(this.slide.spec.param, this.slideValue(this.slide.obj, this.slide.spec));
+      return;
+    }
     if (this.drag) {
       this.raycaster.setFromCamera(this.pointer, this.camera);
       const p = new THREE.Vector3();
@@ -286,6 +360,17 @@ export class ThreeEngineCore {
   private onPointerUp = (e: PointerEvent): void => {
     const down = this.down;
     this.down = null;
+    if (this.slide) {
+      const { moved } = this.slide;
+      this.slide = null;
+      this.controls.enabled = true;
+      try {
+        this.renderer.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* con trỏ đã được giải phóng */
+      }
+      if (moved) return;
+    }
     if (this.drag) {
       const d = this.drag;
       this.drag = null;
@@ -388,12 +473,14 @@ export class ThreeEngineCore {
     }
     this.controls.update();
 
+    const simDt = this.paused ? this.pendingStep : dt;
+    this.pendingStep = 0;
     if (this.main) {
-      this.main.handle.tick(dt);
+      this.main.handle.tick(simDt);
       this.applyHighlight(this.main.handle.root, time);
       if (this.debug) for (const s of this.main.handle.snapPoints) s.marker.visible = true;
     }
-    this.compare?.handle.tick(dt);
+    this.compare?.handle.tick(simDt);
 
     const w = this.renderer.domElement.width / this.renderer.getPixelRatio();
     const h = this.renderer.domElement.height / this.renderer.getPixelRatio();

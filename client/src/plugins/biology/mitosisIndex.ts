@@ -1,74 +1,94 @@
 /**
- * Plugin Sinh học 10 — Quan sát tiêu bản nguyên phân ở đỉnh rễ hành và tính chỉ số nguyên phân
- * (SGK KNTT Sinh học 10, Bài 21: Thực hành làm và quan sát tiêu bản quá trình nguyên phân).
- * Bộ giải: mitosis-index. Thông số ẩn: mi (tỉ lệ tế bào đang phân chia), fieldSeed (bố cục vi trường).
+ * Plugin Sinh học 10 — Bài 18: Thực hành làm và quan sát tiêu bản quá trình nguyên phân và giảm phân.
+ * Bộ giải: cell-division-slide. Thông số ẩn: mi (nguyên phân), mei (giảm phân), fieldSeed (bố cục vi trường).
  */
 import type { LabPluginDef } from '../../types/lab';
+import { quiz } from '../pluginHelpers';
+
+const ONION = { key: 'sample', in: [0] };
+const GRASSHOPPER = { key: 'sample', in: [1] };
 
 export const mitosisIndexPlugin: LabPluginDef = {
   id: 'sh10-chi-so-nguyen-phan',
-  version: 1,
+  version: 2,
   subject: 'biology',
-  title: 'Quan sát các kì nguyên phân ở tế bào đỉnh rễ hành và tính chỉ số nguyên phân',
-  shortTitle: 'Nguyên phân – rễ hành',
-  sgkRef: 'Sinh học 10 – Bài 21: Thực hành làm và quan sát tiêu bản quá trình nguyên phân',
+  title: 'Thực hành: Làm và quan sát tiêu bản quá trình nguyên phân và giảm phân',
+  shortTitle: 'Bài 18 – Nguyên phân, giảm phân',
+  sgkRef: 'Sinh học 10 – Bài 18: Thực hành: Làm và quan sát tiêu bản quá trình nguyên phân và giảm phân',
   chapter: 'Chương 5: Chu kì tế bào và phân bào',
   grade: 10,
-  durationMin: 30,
+  durationMin: 40,
   objectives: [
-    'Nhận biết tế bào ở kì trung gian và các kì đầu, giữa, sau, cuối của nguyên phân.',
-    'Đếm tế bào trên nhiều vi trường, tính chỉ số nguyên phân MI.',
-    'Ước lượng thời gian tương đối của từng kì dựa trên tỉ lệ tế bào.'
+    'Nêu quy trình: cố định (Carnoy) → nhuộm (acetocarmine 2%) → làm tiêu bản ép → quan sát.',
+    'Nhận diện nhiễm sắc thể ở các kì nguyên phân (đầu rễ hành) và giảm phân (ống sinh tinh châu chấu đực).',
+    'Đếm tế bào trên nhiều vi trường và tính tỉ lệ tế bào đang phân chia.'
   ],
   theory:
-    'Đỉnh rễ hành có mô phân sinh phân chia mạnh. Sau khi thủy phân bằng HCl và nhuộm bằng thuốc nhuộm (orcein/carmine), nhiễm sắc thể bắt màu đậm. Chỉ số nguyên phân MI = (số tế bào đang phân chia / tổng số tế bào) × 100%. Kì trung gian chiếm phần lớn thời gian chu kì nên phần lớn tế bào ở kì trung gian.',
-  equation: 'MI = (đầu + giữa + sau + cuối) / tổng × 100%',
+    'Đầu rễ hành có mô phân sinh nguyên phân mạnh; ống sinh tinh của châu chấu đực có nhiều tế bào đang giảm phân. Mẫu được cố định bằng dung dịch Carnoy, nhuộm acetocarmine 2% để NST bắt màu đỏ, rồi đặt lên lam kính, dàn mỏng. Kì giữa nguyên phân: NST kép xếp một hàng; kì giữa giảm phân I: các cặp NST kép tương đồng xếp hai hàng.',
+  equation: 'Tỉ lệ phân chia = Σ tế bào ở các kì / Σ tổng × 100%',
   sceneTemplate: 'microscope',
-  sceneOptions: { slideLabel: 'Tiêu bản đỉnh rễ hành', allowSpecimenSwitch: false },
-  solverId: 'mitosis-index',
+  sceneOptions: { slideLabel: 'Tiêu bản ép', allowSpecimenSwitch: true },
+  solverId: 'cell-division-slide',
   params: [
-    { key: 'field', label: 'Vi trường số', unit: '', min: 1, max: 12, step: 1, default: 1 },
-    { key: 'stain', label: 'Thời gian nhuộm', unit: 'phút', min: 1, max: 10, step: 1, default: 5 }
+    { key: 'sample', label: 'Mẫu vật', unit: '', min: 0, max: 1, step: 1, default: 0, options: [{ value: 0, label: 'Đầu rễ hành (nguyên phân)' }, { value: 1, label: 'Ống sinh tinh châu chấu (giảm phân)' }] },
+    { key: 'fix', label: 'Thời gian cố định (Carnoy)', unit: 'phút', min: 5, max: 40, step: 5, default: 20 },
+    { key: 'stain', label: 'Thời gian nhuộm acetocarmine 2%', unit: 'phút', min: 5, max: 30, step: 5, default: 15 },
+    { key: 'field', label: 'Vi trường số', unit: '', min: 1, max: 12, step: 1, default: 1 }
   ],
   hidden: [
-    { key: 'mi', label: 'Tỉ lệ tế bào phân chia', unit: '', min: 0.08, max: 0.16, decimals: 3 },
+    { key: 'mi', label: 'Tỉ lệ nguyên phân', unit: '', min: 0.1, max: 0.18, decimals: 3 },
+    { key: 'mei', label: 'Tỉ lệ giảm phân', unit: '', min: 0.3, max: 0.5, decimals: 3 },
     { key: 'fieldSeed', label: 'Hạt giống vi trường', unit: '', min: 1000, max: 9999, decimals: 0 }
   ],
   measurements: [
     { key: 'total', label: 'Tổng số TB', unit: 'TB', decimals: 0 },
-    { key: 'prophase', label: 'Kì đầu', unit: 'TB', decimals: 0 },
-    { key: 'metaphase', label: 'Kì giữa', unit: 'TB', decimals: 0 },
-    { key: 'anaphase', label: 'Kì sau', unit: 'TB', decimals: 0 },
-    { key: 'telophase', label: 'Kì cuối', unit: 'TB', decimals: 0 }
+    { key: 'pro', label: 'Kì đầu', unit: 'TB', decimals: 0, showIf: ONION },
+    { key: 'meta', label: 'Kì giữa', unit: 'TB', decimals: 0, showIf: ONION },
+    { key: 'ana', label: 'Kì sau', unit: 'TB', decimals: 0, showIf: ONION },
+    { key: 'telo', label: 'Kì cuối', unit: 'TB', decimals: 0, showIf: ONION },
+    { key: 'pro1', label: 'Kì đầu I', unit: 'TB', decimals: 0, showIf: GRASSHOPPER },
+    { key: 'meta1', label: 'Kì giữa I', unit: 'TB', decimals: 0, showIf: GRASSHOPPER },
+    { key: 'ana1', label: 'Kì sau I', unit: 'TB', decimals: 0, showIf: GRASSHOPPER },
+    { key: 'telo1', label: 'Kì cuối I', unit: 'TB', decimals: 0, showIf: GRASSHOPPER },
+    { key: 'mei2', label: 'Giảm phân II', unit: 'TB', decimals: 0, showIf: GRASSHOPPER }
+  ],
+  derived: [{ key: 'ratio', label: 'Tỉ lệ phân chia', unit: '%', decimals: 1 }],
+  charts: [
+    { id: 'ratio', title: 'Tỉ lệ tế bào đang phân chia theo vi trường', kind: 'bar', x: 'field', y: 'ratio', xLabel: 'Vi trường', yLabel: '%', groupBy: 'sample' },
+    { id: 'pro', title: 'Số tế bào ở kì đầu theo vi trường', kind: 'bar', x: 'field', y: 'pro', xLabel: 'Vi trường', yLabel: 'TB', showIf: ONION }
   ],
   minTrials: 5,
-  result: { key: 'MI', label: 'Chỉ số nguyên phân MI', unit: '%', tolerancePercent: 20, decimals: 1, hint: 'Cộng dồn trên mọi vi trường khác nhau: MI = Σ(đầu+giữa+sau+cuối)/Σ tổng × 100.' },
+  result: { key: 'ratio', label: 'Tỉ lệ tế bào đang phân chia của mẫu ở lần đo cuối', unit: '%', tolerancePercent: 15, decimals: 1, hint: 'Cộng dồn mọi vi trường khác nhau của CÙNG một mẫu: Σ tế bào ở các kì / Σ tổng × 100.' },
   steps: [
-    { id: 's1', title: 'Đặt tiêu bản rễ hành', instruction: 'Kéo tiêu bản đỉnh rễ hành đã nhuộm lên bàn kính.', action: 'snap', trigger: 'stage-slot' },
-    { id: 's2', title: 'Bật đèn và tìm vùng mô phân sinh', instruction: 'Chạm vào đèn; dùng vật kính 10× tìm vùng tế bào nhỏ, xếp sít.', action: 'click', trigger: 'light' },
-    { id: 's3', title: 'Chọn vi trường & thời gian nhuộm', instruction: 'Chọn vi trường quan sát và thời gian nhuộm phù hợp (4–6 phút).', action: 'adjust' },
-    { id: 's4', title: 'Đếm tế bào trong vi trường', instruction: 'Chạm vào ốc vi cấp (hoặc nút Đo) để đếm số tế bào ở từng kì.', action: 'measure', trigger: 'fine-knob' },
-    { id: 's5', title: 'Tổng hợp nhiều vi trường', instruction: 'Đếm ≥ 5 vi trường khác nhau, tính MI và tỉ lệ từng kì.', action: 'record' }
+    { id: 's1', title: 'Cố định, nhuộm và làm tiêu bản', instruction: 'Trang bị bảo hộ; chạm vào ống nhỏ giọt để cố định bằng Carnoy và nhuộm acetocarmine 2%.', action: 'click', trigger: 'dropper', requiresPpe: true },
+    { id: 's2', title: 'Đặt tiêu bản lên bàn kính', instruction: 'Kéo tiêu bản lên bàn kính hiển vi.', action: 'snap', trigger: 'stage-slot' },
+    { id: 's3', title: 'Bật đèn, tìm vùng phân chia', instruction: 'Chạm vào đèn; tìm vùng có nhiều tế bào đang phân chia.', action: 'click', trigger: 'light' },
+    { id: 's4', title: 'Chọn mẫu và vi trường', instruction: 'Chọn mẫu, thời gian nhuộm và vi trường.', action: 'adjust' },
+    { id: 's5', title: 'Đếm tế bào ở từng kì', instruction: 'Chạm vào ốc vi cấp (hoặc nút Đo).', action: 'measure', trigger: 'fine-knob' },
+    { id: 's6', title: 'Tổng hợp nhiều vi trường', instruction: 'Đếm ít nhất 5 vi trường khác nhau của cùng một mẫu.', action: 'record' }
   ],
   ppeRequired: ['goggles', 'gloves', 'labelCheck'],
   chemicals: [
-    { name: 'Hydrochloric acid', formula: 'HCl', concentration: '1 M', hazards: ['Ăn mòn', 'Kích ứng hô hấp'] },
-    { name: 'Thuốc nhuộm orcein acetic', formula: '—', concentration: '2%', hazards: ['Nhuộm màu', 'Kích ứng'] }
+    { name: 'Dung dịch Carnoy', formula: 'ethanol : acetic acid (3 : 1)', concentration: '—', hazards: ['Dễ cháy', 'Ăn mòn'] },
+    { name: 'Acetocarmine', formula: '—', concentration: '2%', hazards: ['Nhuộm màu', 'Kích ứng'] }
   ],
-  incidents: [{ id: 'overstain', title: 'Nhuộm quá lâu', message: 'Nhuộm > 8 phút làm cả tế bào chất bắt màu đậm, khó phân biệt nhiễm sắc thể. Giảm thời gian nhuộm.', severity: 'warning' }],
+  incidents: [
+    { id: 'poor-fix', title: 'Cố định chưa đủ', message: 'Cố định dưới 10 phút: tế bào biến dạng, ảnh mờ. Hãy tăng thời gian cố định.', severity: 'warning' },
+    { id: 'overstain', title: 'Nhuộm quá lâu', message: 'Nhuộm trên 25 phút làm cả tế bào chất bắt màu, khó nhận diện NST.', severity: 'warning' }
+  ],
   preQuiz: [
-    { id: 'q1', prompt: 'Kì trung gian là giai đoạn:', options: ['Tế bào nghỉ ngơi, không hoạt động', 'Tế bào sinh trưởng, nhân đôi DNA', 'Nhiễm sắc thể co xoắn cực đại', 'Tế bào chất phân chia'], correctIndex: 1, explanation: 'Kì trung gian là giai đoạn hoạt động mạnh: tổng hợp, nhân đôi DNA.', misconceptionId: 'bio-mitosis-interphase-rest' },
-    { id: 'q2', prompt: 'Kì nhiễm sắc thể xếp thành một hàng trên mặt phẳng xích đạo:', options: ['Kì đầu', 'Kì giữa', 'Kì sau', 'Kì cuối'], correctIndex: 1, explanation: 'Kì giữa: NST kép co xoắn cực đại, xếp 1 hàng.' },
-    { id: 'q3', prompt: 'Vì sao chọn đỉnh rễ hành để quan sát nguyên phân?', options: ['Vì có nhiều tế bào đang phân chia', 'Vì có màu đẹp', 'Vì dễ cắt', 'Vì có diệp lục'], correctIndex: 0, explanation: 'Mô phân sinh đỉnh rễ phân chia mạnh.' }
+    quiz('q1', 'Kì trung gian là giai đoạn:', ['Tế bào nghỉ ngơi', 'Tế bào sinh trưởng, nhân đôi DNA', 'NST co xoắn cực đại', 'Tế bào chất phân chia'], 1, 'Kì trung gian có hoạt động mạnh, pha S nhân đôi DNA.', 'bio-mitosis-interphase-rest'),
+    quiz('q2', 'Kì giữa giảm phân I, NST kép xếp thành:', ['Một hàng', 'Hai hàng', 'Ba hàng', 'Không xếp hàng'], 1, 'Các cặp tương đồng xếp hai hàng.'),
+    quiz('q3', 'Dung dịch Carnoy dùng để:', ['Nhuộm NST', 'Cố định mẫu', 'Rửa lam kính', 'Nuôi tế bào'], 1, 'Carnoy giữ nguyên trạng thái tế bào.')
   ],
   postQuiz: [
-    { id: 'p1', prompt: 'Đếm 500 tế bào, 60 tế bào đang phân chia. MI =', options: ['12%', '6%', '60%', '8,3%'], correctIndex: 0, explanation: '60/500 × 100% = 12%.' },
-    { id: 'p2', prompt: 'Phần lớn tế bào quan sát được ở kì trung gian vì:', options: ['Kì trung gian chiếm thời gian dài nhất', 'Tế bào đã chết', 'Thuốc nhuộm kém', 'Kính hiển vi yếu'], correctIndex: 0, explanation: 'Tỉ lệ số tế bào phản ánh thời gian tương đối của từng giai đoạn.', misconceptionId: 'bio-mitosis-interphase-rest' },
-    { id: 'p3', prompt: 'Ở kì sau của nguyên phân:', options: ['NST kép tách thành NST đơn đi về hai cực', 'NST nhân đôi', 'Màng nhân xuất hiện', 'NST xếp 2 hàng'], correctIndex: 0, explanation: 'Các chromatid chị em tách nhau ở tâm động.' }
+    quiz('p1', 'Đếm 500 tế bào, 60 đang phân chia. Tỉ lệ là:', ['12%', '6%', '60%', '8,3%'], 0, '60/500 = 12%.'),
+    quiz('p2', 'Phần lớn tế bào đầu rễ hành ở kì trung gian vì:', ['Kì trung gian chiếm thời gian dài nhất', 'Tế bào đã chết', 'Thuốc nhuộm kém', 'Kính hiển vi yếu'], 0, 'Tỉ lệ tế bào phản ánh thời gian tương đối.', 'bio-mitosis-interphase-rest'),
+    quiz('p3', 'Kết quả giảm phân từ một tế bào (2n) là:', ['2 tế bào 2n', '4 tế bào n', '2 tế bào n', '4 tế bào 2n'], 1, 'Hai lần phân bào, một lần nhân đôi DNA.')
   ],
   meniscusSkill: false,
-  conclusionPrompt: 'Nêu chỉ số nguyên phân, kì chiếm tỉ lệ lớn nhất và ý nghĩa của nguyên phân.',
-  conclusionKeywords: ['chỉ số nguyên phân', 'kì trung gian', 'kì giữa'],
-  tags: ['nguyên phân', 'rễ hành', 'chu kì tế bào'],
+  conclusionPrompt: 'So sánh hình ảnh nguyên phân và giảm phân, ghi tỉ lệ tế bào đang phân chia.',
+  conclusionKeywords: ['nguyên phân', 'giảm phân', 'nhiễm sắc thể'],
+  tags: ['nguyên phân', 'giảm phân', 'Carnoy', 'acetocarmine'],
   source: 'builtin'
 };

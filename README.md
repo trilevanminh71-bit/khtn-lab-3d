@@ -11,14 +11,21 @@ Chuẩn SGK *Kết nối tri thức với cuộc sống* — Chương trình GDP
 | Máy yếu, trường thiếu thiết bị, vùng không Internet | Three.js thuần, mô hình dựng bằng code (0 KB file 3D), tự hạ chất lượng khi FPS < 28, bản USB offline, nộp bài bằng mã QR |
 | Cập nhật nội dung không cần code | CMS sửa đề, No-Code Wizard tạo bài mới 4 bước, tải ảnh tiêu bản / mô hình .glb, gói cập nhật JSON từ GitHub/Drive |
 
-## 12 bài thí nghiệm
+## 23 bài học thực hành
 
-| Vật lí | Hóa học | Sinh học |
+| Vật lí 10 | Hóa học 10 | Sinh học 10 |
 |---|---|---|
-| Đo tốc độ bằng cổng quang điện (Bài 6) | Tốc độ phản ứng sodium thiosulfate + sulfuric acid — hệ số Van't Hoff (Bài 19) | Quan sát tế bào nhân sơ & tế bào nhân thực (Bài 10) |
-| Đo gia tốc rơi tự do (Bài 11) | Xúc tác MnO₂ / catalase phân hủy hydrogen peroxide (Bài 19) | Co nguyên sinh – phản co nguyên sinh (Bài 12) |
-| Định luật II Newton trên đệm khí (Bài 15) | Chuẩn độ Fe²⁺ bằng potassium permanganate (Bài 15) | Ảnh hưởng nhiệt độ, pH đến enzyme amylase (Chương 4) |
-| Suất điện động & điện trở trong của pin (mở rộng) | Enthalpy Zn + copper(II) sulfate (Bài 17) | Chỉ số nguyên phân ở đỉnh rễ hành (Bài 21) |
+| Bài 6 – Đo tốc độ (MC964, cổng E/F trượt) | Bài 12 – Liên kết cộng hóa trị | Bài 7 – Tế bào nhân sơ, tỉ lệ S/V |
+| Bài 11 – Đo gia tốc rơi tự do | Bài 15 – Oxi hóa – khử, số oxi hóa | Bài 9 – Quan sát tế bào |
+| Bài 15 – Định luật 2 Newton | Bài 15 – Chuẩn độ potassium permanganate | Bài 10 – Trao đổi chất qua màng |
+| Bài 22 – Tổng hợp lực | Bài 17 – Biến thiên enthalpy (tỏa/thu nhiệt) | Bài 11 – Co và phản co nguyên sinh |
+| Bài 30 – Động lượng, va chạm | Bài 19 – Nồng độ, nhiệt độ (thiosulfate) | Bài 12 – Truyền tin tế bào |
+| Suất điện động, điện trở trong (mở rộng) | Bài 19 – Chất xúc tác (H₂O₂) | Bài 15 – Amylase: nhiệt độ, pH |
+| | Bài 19 – Các yếu tố ảnh hưởng tốc độ | Bài 15 – Protease & amylase: 4 điều kiện |
+| | Bài 23 – Nhóm halogen | Bài 18 – Tiêu bản nguyên phân, giảm phân |
+| | | Bài 21 – Sinh trưởng vi sinh vật |
+
+Mỗi bài có bảng số liệu tiếng Việt (gồm cột tự tính), biểu đồ SVG, góc nhìn chuẩn theo bước, nút Chạy/Dừng/Từng bước/Đặt lại và **phiếu thí nghiệm** in/xuất được.
 
 Mỗi học sinh nhận **bộ thông số ẩn riêng** (g, E, r, nồng độ…) sinh từ mã HS + mã lớp → không chép được số liệu.
 
@@ -48,7 +55,7 @@ build-offline-usb.bat     # Windows
 ./build-offline-usb.sh    # macOS / Linux
 ```
 
-Tạo thư mục `KHTN-Lab-USB/` (≈ 1,4 MB). Chép vào USB, nhấp đúp `CHAY_KHTN_LAB.bat` — máy chủ mini PowerShell có sẵn trong Windows chạy web tại `http://localhost:8080`, tránh lỗi CORS khi mở `file://`. Chi tiết: [docs/HUONG_DAN_BAN_USB_OFFLINE.md](docs/HUONG_DAN_BAN_USB_OFFLINE.md).
+Tạo thư mục `KHTN-Lab-USB/` (≈ 1,7 MB). Chép vào USB, nhấp đúp `CHAY_KHTN_LAB.bat` — máy chủ mini PowerShell có sẵn trong Windows chạy web tại `http://localhost:8080`, tránh lỗi CORS khi mở `file://`. Chi tiết: [docs/HUONG_DAN_BAN_USB_OFFLINE.md](docs/HUONG_DAN_BAN_USB_OFFLINE.md).
 
 ## Deploy Cloud (miễn phí)
 
@@ -65,7 +72,7 @@ cd client && npm install && npx tsc --noEmit && npm run test && npm run build
 python -m py_compile server/app/main.py server/app/database.py server/app/models.py server/app/schemas.py server/app/api/auth.py server/app/api/assignments.py server/app/api/submissions.py server/app/api/tutor.py
 ```
 
-Vitest kiểm chứng toàn bộ công thức Lý–Hóa–Sinh, chấm điểm, mã QR, biểu thức No-Code, thống kê KHKT, PIN SHA-256, và chạy **quy trình chuẩn của cả 12 bài** để đảm bảo kết quả nằm trong sai số cho phép.
+Vitest kiểm chứng toàn bộ công thức Lý–Hóa–Sinh, chấm điểm, mã QR, biểu thức No-Code, thống kê KHKT, PIN SHA-256, và chạy **quy trình chuẩn của cả 23 bài** để đảm bảo kết quả nằm trong sai số cho phép.
 
 ## Tài liệu
 

@@ -11,8 +11,31 @@
 /** Môn học */
 export type SubjectId = 'physics' | 'chemistry' | 'biology';
 
-/** 5 template cảnh 3D có sẵn (dùng cho cả bài mặc định lẫn bài No-Code) */
-export type SceneTemplateId = 'track' | 'circuit' | 'beaker' | 'titration' | 'microscope';
+/** Template cảnh 3D. 5 template đầu dùng được cho No-Code Wizard; các template sau dành cho bài chuyên biệt */
+export type SceneTemplateId =
+  | 'track'
+  | 'circuit'
+  | 'beaker'
+  | 'titration'
+  | 'microscope'
+  | 'force'
+  | 'airtrack'
+  | 'molecule'
+  | 'cell'
+  | 'membrane'
+  | 'signal';
+
+/** Điều kiện hiển thị: chỉ hiện khi tham số `key` nhận một trong các giá trị `in` (ví dụ theo chế độ đo) */
+export interface ShowIf {
+  key: string;
+  in: number[];
+}
+
+/** Một lựa chọn rời rạc của tham số (hiển thị thành nút chọn thay cho thanh trượt) */
+export interface ParamOption {
+  value: number;
+  label: string;
+}
 
 /** Trang bị bảo hộ cá nhân trong phòng thí nghiệm */
 export type PpeItem = 'goggles' | 'gloves' | 'labelCheck';
@@ -34,6 +57,8 @@ export interface ParamDef {
   step: number;
   default: number;
   description?: string;
+  options?: ParamOption[];
+  showIf?: ShowIf;
 }
 
 /** Thông số ẩn — sinh ngẫu nhiên theo seed từng học sinh để chống chép số liệu */
@@ -52,7 +77,48 @@ export interface MeasurementDef {
   label: string;
   unit: string;
   decimals: number;
+  showIf?: ShowIf;
+  /** Hiển thị chữ thay cho mã số, ví dụ { "1": "Kết tủa trắng" } */
+  valueLabels?: Record<string, string>;
 }
+
+/** Cột TỰ TÍNH từ tham số và số đo: bằng biểu thức an toàn `expr` hoặc bằng solver.derive */
+export interface DerivedDef extends MeasurementDef {
+  expr?: string;
+}
+
+/** Biểu đồ SVG gắn với bảng số liệu. x/y là "index" (lần đo) hoặc khóa tham số / số đo / cột tự tính */
+export interface ChartDef {
+  id: string;
+  title: string;
+  kind: 'line' | 'scatter' | 'bar';
+  x: string;
+  y: string;
+  xLabel: string;
+  yLabel: string;
+  /** Tách thành nhiều dãy theo một tham số (tối đa 3 dãy) */
+  groupBy?: string;
+  refLine?: { value: number; label: string };
+  showIf?: ShowIf;
+}
+
+/** Khối giải thích trực tiếp theo thông số đang chọn */
+export interface InsightBlock {
+  title: string;
+  lines: string[];
+  tone: 'info' | 'ok' | 'warn';
+}
+
+/** Một dòng kết quả xử lí số liệu tự động */
+export interface SummaryLine {
+  label: string;
+  value: string;
+  note?: string;
+  status?: 'ok' | 'warn';
+}
+
+/** Công cụ bổ trợ riêng của bài */
+export type LessonTool = 'mc964' | 'oxidation';
 
 /** Đại lượng kết quả cuối cùng học sinh phải tính và nhập */
 export interface ResultTarget {
@@ -147,6 +213,9 @@ export interface LabPluginDef {
   conclusionKeywords: string[];
   tags: string[];
   source: PluginSource;
+  derived?: DerivedDef[];
+  charts?: ChartDef[];
+  tools?: LessonTool[];
 }
 
 /** Bài No-Code: mỗi lần đo = biểu thức của tham số + thông số ẩn + nhiễu */
@@ -207,6 +276,12 @@ export interface LabSolver {
   estimateFromTrials(trials: TrialRecord[], ctx: SolveContext): number;
   /** Danh sách id sự cố đang xảy ra với thông số hiện tại */
   incidents(ctx: SolveContext): string[];
+  /** Giá trị các cột tự tính của một lần đo (all: toàn bộ các lần đo, dùng cho độ lệch so với trung bình) */
+  derive?(trial: TrialRecord, all: TrialRecord[], plugin: LabPluginDef): Record<string, number>;
+  /** Xử lí số liệu tự động (trung bình, sai số, kết luận) */
+  summarize?(trials: TrialRecord[], plugin: LabPluginDef): SummaryLine[];
+  /** Giải thích kiến thức theo thông số đang chọn */
+  insight?(ctx: SolveContext): InsightBlock[];
 }
 
 /** Một tiêu chí chấm điểm */
@@ -349,6 +424,8 @@ export interface AuditEntry {
 /** Bản nháp tự lưu mỗi 5 giây */
 export interface DraftRecord {
   pluginId: string;
+  /** Phiên bản bài lúc lưu nháp; khác phiên bản hiện tại → không khôi phục (thông số đã đổi). Thiếu = 1 */
+  pluginVersion?: number;
   params: Record<string, number>;
   trials: TrialRecord[];
   completedSteps: string[];

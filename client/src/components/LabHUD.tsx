@@ -3,20 +3,22 @@
  *  - Ngang / máy tính: cột bên phải; Dọc / điện thoại: ngăn dưới cảnh 3D, chia tab.
  *  - Chọn bài, phiên học sinh, Pre-Quiz, quy trình các bước, thông số, nút Đo (chống bấm đúp),
  *    bảng số liệu + thống kê, kết quả & kết luận, nút Về góc nhìn chuẩn, Làm lại (xác nhận), Nộp bài.
- *  - Tự lưu nháp mỗi 5 giây vào IndexedDB, hỏi khôi phục khi mở lại bài.
+ *  - Tự lưu nháp mỗi 5 giây vào IndexedDB; thẻ "Tiếp tục bài đang làm dở"; biểu đồ và phiếu thí nghiệm.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Calculator, Camera, CheckCircle2, Circle, ClipboardCheck, Eye, FileText, Play, RotateCcw, Ruler, Trash2, UserRound } from 'lucide-react';
+import { Bot, Calculator, Camera, CheckCircle2, Circle, ClipboardCheck, Eye, FileText, Play, Printer, RotateCcw, Ruler, UserRound } from 'lucide-react';
 import { hasUnsavedWork, useLabStore } from '../store/useLabStore';
 import { APP_CONFIG, SUBJECT_COLORS } from '../config/appConfig';
-import { clearDraft, loadDraft, saveDraft } from '../offline/db';
+import { clearDraft, saveDraft } from '../offline/db';
 import { createGuard } from '../utils/debounceGuard';
 import { absError, mean } from '../engines/statistics';
 import { fmtVi } from '../services/appServices';
 import { sanitizeCode } from '../utils/qrSyncCodec';
 import { hashString } from '../utils/randomizer';
-import { columnLabel } from '../utils/columnLabels';
 import { ModalShell } from './ModalShell';
+import { InsightPanel, Mc964Console, OxidationTool, ParamControls, PrincipleBox, ResumeCard, SummaryPanel } from './LessonPanels';
+import { TrialTable } from './TrialTable';
+import { ChartGrid } from './DataChart';
 import type { QuizQuestion } from '../types/lab';
 
 const measureGuard = createGuard(700);
@@ -144,7 +146,6 @@ export function LabHUD() {
   const subject = useLabStore((s) => s.subject);
   const plugin = useLabStore((s) => s.plugin);
   const session = useLabStore((s) => s.session);
-  const params = useLabStore((s) => s.params);
   const trials = useLabStore((s) => s.trials);
   const completed = useLabStore((s) => s.completedSteps);
   const studentValue = useLabStore((s) => s.studentValue);
@@ -161,28 +162,18 @@ export function LabHUD() {
   const list = plugins.filter((p) => p.subject === subject);
   const lastPluginId = useRef<string>('');
 
-  // Mở bài: hỏi khôi phục nháp, hiện Pre-Quiz
+  // Mở bài: hiện Pre-Quiz (nháp dở được mời làm tiếp bằng thẻ ResumeCard)
   useEffect(() => {
     if (lastPluginId.current === plugin.id) return;
     lastPluginId.current = plugin.id;
     setTab('steps');
     setShowPre(!useLabStore.getState().preSubmitted && plugin.preQuiz.length > 0);
-    void loadDraft(plugin.id)
-      .then((d) => {
-        if (d && (d.trials.length > 0 || d.completedSteps.length > 0)) {
-          st().askConfirm({
-            title: 'Khôi phục bài làm dở?',
-            message: `Tìm thấy bản nháp bài "${plugin.shortTitle}" lưu lúc ${new Date(d.savedAt).toLocaleString('vi-VN')} (${d.trials.length} lần đo). Làm tiếp từ bản nháp?`,
-            confirmLabel: 'Làm tiếp',
-            onConfirm: () => {
-              st().restoreDraft(d);
-              setShowPre(false);
-            }
-          });
-        }
-      })
-      .catch(() => undefined);
-  }, [plugin, st]);
+  }, [plugin]);
+
+  // Khôi phục nháp / đã bắt đầu làm → không che bằng câu hỏi trước thí nghiệm
+  useEffect(() => {
+    if (trials.length > 0 || completed.length > 0) setShowPre(false);
+  }, [trials.length, completed.length]);
 
   // Tự lưu nháp mỗi 5 giây
   useEffect(() => {
@@ -278,7 +269,8 @@ export function LabHUD() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
+      <div key={`${plugin.id}-${tab}`} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
+        <ResumeCard />
         {showPre ? (
           <QuizPanel phase="pre" questions={plugin.preQuiz} onDone={() => setShowPre(false)} />
         ) : tab === 'steps' ? (
@@ -326,25 +318,19 @@ export function LabHUD() {
             )}
             {!currentStep && <p className="rounded-lg bg-emerald-900/40 p-2 text-sm text-ok">Đã hoàn thành mọi bước! Chuyển sang tab Kết quả để nộp bài.</p>}
 
+            {plugin.tools?.includes('mc964') && <Mc964Console />}
+            <PrincipleBox />
             <div className="space-y-2 rounded-lg border border-slate-700 p-2">
               <h3 className="text-xs font-bold uppercase text-slate-400">Thông số thí nghiệm</h3>
-              {plugin.params.map((p) => (
-                <div key={p.key}>
-                  <label className="flex justify-between text-xs" htmlFor={`param-${p.key}`}>
-                    <span>{p.label}</span>
-                    <b className="font-mono text-amber-200">
-                      {fmtVi(params[p.key] ?? p.default, 3)} {p.unit}
-                    </b>
-                  </label>
-                  <input id={`param-${p.key}`} type="range" className="w-full" min={p.min} max={p.max} step={p.step} value={params[p.key] ?? p.default} onChange={(e) => st().setParam(p.key, Number(e.target.value))} aria-valuetext={`${params[p.key]} ${p.unit}`} />
-                </div>
-              ))}
+              <ParamControls />
               {currentStep?.action === 'adjust' && (
                 <button className="btn w-full text-xs" onClick={doStep}>
                   Giữ thông số mặc định và tiếp tục
                 </button>
               )}
             </div>
+            <InsightPanel />
+            {plugin.tools?.includes('oxidation') && <OxidationTool />}
             <div className="grid grid-cols-2 gap-1.5">
               <button className="btn-primary col-span-2 py-2 text-base" onClick={doMeasure} disabled={submitted}>
                 <Ruler size={18} /> Đo / ghi số liệu
@@ -367,49 +353,19 @@ export function LabHUD() {
             {trials.length === 0 ? (
               <p className="text-sm text-slate-400">Chưa có số liệu. Bấm “Đo / ghi số liệu” ở tab Quy trình hoặc chạm vào dụng cụ đo trong cảnh 3D.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-700 text-left text-slate-400">
-                      <th className="p-1">Lần</th>
-                      {plugin.params.map((p) => (
-                        <th key={p.key} className="p-1">
-                          {columnLabel(p)} ({p.unit || '–'})
-                        </th>
-                      ))}
-                      {plugin.measurements.map((m) => (
-                        <th key={m.key} className="p-1 text-amber-200">
-                          {m.label} ({m.unit || '–'})
-                        </th>
-                      ))}
-                      <th className="p-1" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trials.map((t) => (
-                      <tr key={t.index} className="border-b border-slate-800">
-                        <td className="p-1">{t.index}</td>
-                        {plugin.params.map((p) => (
-                          <td key={p.key} className="p-1 font-mono">{fmtVi(t.params[p.key], 3)}</td>
-                        ))}
-                        {plugin.measurements.map((m) => (
-                          <td key={m.key} className="p-1 font-mono">{fmtVi(t.values[m.key], m.decimals)}</td>
-                        ))}
-                        <td className="p-1">
-                          <button className="text-slate-500 hover:text-danger" onClick={() => st().deleteTrial(t.index)} aria-label={`Xóa lần đo ${t.index}`} title="Loại bỏ lần đo bất thường">
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} />
             )}
+            {trials.length > 0 && (
+              <button className="btn w-full text-xs" onClick={() => st().openModal('worksheet')}>
+                <Printer size={14} /> In / Xuất phiếu thí nghiệm
+              </button>
+            )}
+            <SummaryPanel />
+            <ChartGrid plugin={plugin} trials={trials} />
             {trials.length > 0 && (
               <div className="rounded-lg bg-slate-800/60 p-2 text-xs">
                 <b>Thống kê nhanh (toàn bộ lần đo):</b>
-                {stats.map(({ m, mean: mu, err, n }) => (
+                {stats.filter((x) => x.n > 0 && !x.m.valueLabels).map(({ m, mean: mu, err, n }) => (
                   <div key={m.key}>
                     {m.label}: trung bình = <b className="font-mono">{fmtVi(mu, m.decimals + 1)}</b> {m.unit}; Δ̄ = <span className="font-mono">{fmtVi(err, m.decimals + 1)}</span> (n = {n})
                   </div>
@@ -437,6 +393,9 @@ export function LabHUD() {
               </button>
               <button className="btn text-xs" onClick={() => st().setTutorOpen(true)}>
                 <Bot size={14} /> Hỏi trợ lý AI
+              </button>
+              <button className="btn col-span-2 text-xs" onClick={() => st().openModal('worksheet')}>
+                <Printer size={14} /> In / Xuất phiếu thí nghiệm
               </button>
               <button className="btn-primary col-span-2 py-2" onClick={() => st().openModal('report')}>
                 <FileText size={16} /> {submitted ? 'Xem lại phiếu báo cáo' : 'Nộp bài & xem phiếu báo cáo'}

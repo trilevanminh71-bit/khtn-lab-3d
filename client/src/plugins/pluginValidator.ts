@@ -6,7 +6,7 @@
 import type { LabPluginDef, SceneTemplateId, SubjectId } from '../types/lab';
 
 const SUBJECTS: SubjectId[] = ['physics', 'chemistry', 'biology'];
-const TEMPLATES: SceneTemplateId[] = ['track', 'circuit', 'beaker', 'titration', 'microscope'];
+const TEMPLATES: SceneTemplateId[] = ['track', 'circuit', 'beaker', 'titration', 'microscope', 'force', 'airtrack', 'molecule', 'cell', 'membrane', 'signal'];
 
 /** Giá trị mặc định cho các trường tùy chọn của bài tự tạo */
 const PLUGIN_DEFAULTS: Omit<LabPluginDef, 'id' | 'title' | 'subject' | 'sceneTemplate' | 'solverId' | 'params' | 'hidden' | 'measurements' | 'result' | 'steps' | 'preQuiz' | 'postQuiz' | 'objectives'> = {
@@ -57,6 +57,9 @@ export function validatePluginDef(raw: unknown, knownSolvers: string[]): Validat
       if (!isObj(p) || !isStr(p.key) || !isNum(p.min) || !isNum(p.max) || !isNum(p.default) || !isNum(p.step)) {
         errors.push(`Tham số #${i + 1} thiếu key/min/max/step/default.`);
       } else if (p.min >= p.max) errors.push(`Tham số "${p.key}": min phải nhỏ hơn max.`);
+      if (isObj(p) && p.options !== undefined && (!Array.isArray(p.options) || !p.options.every((o) => isObj(o) && isNum(o.value) && isStr(o.label)))) {
+        errors.push(`Tham số #${i + 1}: danh sách lựa chọn (options) sai cấu trúc.`);
+      }
     });
   }
   if (Array.isArray(r.steps) && r.steps.length === 0) errors.push('Bài học cần ít nhất 1 bước.');
@@ -75,6 +78,7 @@ export function validatePluginDef(raw: unknown, knownSolvers: string[]): Validat
   if (!isObj(r.result) || !isStr(r.result.key) || !isNum(r.result.tolerancePercent)) {
     errors.push('Thiếu đại lượng kết quả (result.key, result.tolerancePercent).');
   }
+  for (const k of ['derived', 'charts'] as const) if (r[k] !== undefined && !Array.isArray(r[k])) errors.push(`Trường "${k}" phải là danh sách.`);
   if (errors.length) return { ok: false, errors };
   // Chuẩn hóa các trường tùy chọn
   const plugin: LabPluginDef = { ...PLUGIN_DEFAULTS, ...(r as unknown as LabPluginDef) };

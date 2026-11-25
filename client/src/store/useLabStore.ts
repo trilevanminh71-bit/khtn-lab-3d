@@ -36,8 +36,12 @@ export type ModalId =
   | 'teacher'
   | 'settings'
   | 'meniscus'
+  | 'worksheet'
   | 'session'
   | 'onboarding';
+
+/** Góc nhìn chuẩn: toàn cảnh / chính diện / từ trên / bên cạnh / cận cảnh dụng cụ của một bước */
+export type CameraViewKind = 'overview' | 'front' | 'top' | 'side' | 'step';
 
 export type PinTarget = 'teacher' | 'cms' | 'wizard' | 'assets' | 'khkt' | 'settings-pin';
 
@@ -136,6 +140,13 @@ export interface LabState {
   sceneNonce: number;
   tutorOpen: boolean;
   toolsOpen: boolean;
+  /** Hoạt cảnh đang tạm dừng */
+  simPaused: boolean;
+  /** Tăng mỗi lần bấm Từng bước */
+  simStepNonce: number;
+  /** Trạng thái hiển thị của lần đo gần nhất (để phát lại) */
+  lastMeasureVisual: SceneVisualState | null;
+  cameraView: { kind: CameraViewKind; tag: string | null; nonce: number };
 
   setPlugins(list: LabPluginDef[]): void;
   setSubject(s: SubjectId): void;
@@ -156,7 +167,13 @@ export interface LabState {
   submitQuiz(phase: 'pre' | 'post'): void;
   setMeniscusError(e: number): void;
   markSubmitted(): void;
-  restoreDraft(d: DraftRecord): void;
+  restoreDraft(d: DraftRecord): boolean;
+  resumeDraft(d: DraftRecord): void;
+  simRun(): ActionResult;
+  simPause(): void;
+  simStep(): void;
+  simReset(): void;
+  setCameraView(kind: CameraViewKind, tag?: string | null): void;
   getDraft(): DraftRecord;
   simulateIncident(id: string): void;
   dismissIncident(id: string): void;
@@ -226,7 +243,9 @@ function freshLabState(plugin: LabPluginDef, session: StudentSession | null) {
     postSubmitted: false,
     startedAt: Date.now(),
     meniscusErrorMl: null as number | null,
-    submitted: false
+    submitted: false,
+    simPaused: false,
+    lastMeasureVisual: null as SceneVisualState | null
   };
 }
 
@@ -258,6 +277,9 @@ export const useLabStore = create<LabState>((set, get) => ({
   sceneNonce: 0,
   tutorOpen: false,
   toolsOpen: false,
+  simPaused: false,
+  simStepNonce: 0,
+  cameraView: { kind: 'overview', tag: null, nonce: 0 },
 
   setPlugins(list) {
     const cur = get().plugin.id;
@@ -321,6 +343,19 @@ export const useLabStore = create<LabState>((set, get) => ({
     const idx = st.currentStepIndex();
     const step = st.plugin.steps[idx];
     logAction('interact', tag);
+    if (tag === 'reset') {
+      st.simReset();
+      return { ok: true, message: 'Đã RESET đồng hồ về 0.' };
+    }
+    // Chạm một cấu trúc của mô hình tế bào → chọn cấu trúc đó để xem chức năng
+    if (tag.startsWith('part-') && typeof st.plugin.sceneOptions.partOrder === 'string') {
+      const i = st.plugin.sceneOptions.partOrder.split(',').indexOf(tag.slice(5));
+      const def = st.plugin.params.find((x) => x.key === 'part');
+      if (i >= 0 && def) {
+        st.setParam('part', i);
+        return { ok: true, message: def.options?.find((o) => o.value === i)?.label ?? 'Đã chọn cấu trúc.' };
+      }
+    }
     // Cho phép đo lại sau khi đã qua bước đo
     const measureStep = st.plugin.steps.find((s) => s.action === 'measure');
     if (measureStep && measureStep.trigger === tag && st.completedSteps.includes(measureStep.id)) {
@@ -402,11 +437,11 @@ export const useLabStore = create<LabState>((set, get) => ({
     soundEngine.play(st.plugin.subject === 'chemistry' ? 'bubble' : 'tick');
     vibrate('tap');
     logAction('measure', JSON.stringify(result.values));
-    set({ trials: [...st.trials, trial], visual: result.visual, visualNonce: st.visualNonce + 1, completedSteps: completed });
+    set({ trials: [...st.trials, trial], visual: result.visual, visualNonce: st.visualNonce + 1, completedSteps: completed, simPaused: false, lastMeasureVisual: result.visual });
     const describe = Object.entries(result.values)
       .map(([k, v]) => {
         const m = st.plugin.measurements.find((x) => x.key === k);
-        return `${m?.label ?? k} = ${String(v).replace('.', ',')}${m?.unit ? ` ${m.unit}` : ''}`;
+        return `${m?.label ?? k}: ${m?.valueLabels?.[String(v)] ?? `${String(v).replace('.', ',')}${m?.unit ? ` ${m.unit}` : ''}`}`;
       })
       .join('; ');
     return { ok: true, message: `Lần đo ${trial.index}: ${describe}` };
@@ -449,16 +484,18 @@ export const useLabStore = create<LabState>((set, get) => ({
   markSubmitted: () => set({ submitted: true }),
   restoreDraft(d) {
     const st = get();
-    if (d.pluginId !== st.plugin.id) return;
+    // Bài đã đổi thông số (khác phiên bản) → nháp cũ không còn dùng được
+    if (d.pluginId !== st.plugin.id || (d.pluginVersion ?? 1) !== st.plugin.version) return false;
+    const params = { ...defaultParams(st.plugin), ...d.params };
     const solver = getSolver(st.plugin.solverId);
     let visual = st.visual;
     try {
-      visual = solver.preview({ ...st.solveContext(), params: d.params });
+      visual = solver.preview({ ...st.solveContext(), params });
     } catch {
       /* giữ nguyên */
     }
     set({
-      params: d.params,
+      params,
       trials: d.trials,
       completedSteps: d.completedSteps,
       ppe: d.ppe,
@@ -471,11 +508,44 @@ export const useLabStore = create<LabState>((set, get) => ({
       startedAt: d.startedAt,
       visual
     });
+    return true;
   },
+  resumeDraft(d) {
+    const p = get().plugins.find((x) => x.id === d.pluginId);
+    if (!p) return;
+    if (get().plugin.id !== p.id) get().loadPlugin(p.id);
+    const ok = get().restoreDraft(d);
+    get().toast(ok ? 'success' : 'warning', ok ? `Đã mở lại bài "${p.shortTitle}".` : 'Bản nháp thuộc phiên bản bài cũ nên không khôi phục được.');
+  },
+  simRun() {
+    const st = get();
+    if (st.simPaused) {
+      set({ simPaused: false });
+      return { ok: true, message: 'Tiếp tục hoạt cảnh.' };
+    }
+    if (!st.lastMeasureVisual) return { ok: false, message: 'Chưa có lần đo nào để chạy. Hãy thực hiện bước đo trước.' };
+    set({ visual: st.lastMeasureVisual, visualNonce: st.visualNonce + 1 });
+    return { ok: true, message: 'Phát lại lần đo gần nhất.' };
+  },
+  simPause: () => set({ simPaused: true }),
+  simStep: () => set({ simPaused: true, simStepNonce: get().simStepNonce + 1 }),
+  simReset() {
+    const st = get();
+    let visual = st.visual;
+    try {
+      visual = getSolver(st.plugin.solverId).preview(st.solveContext());
+    } catch {
+      /* bài No-Code lỗi công thức → giữ nguyên cảnh */
+    }
+    soundEngine.play('click');
+    set({ visual, visualNonce: st.visualNonce + 1, simPaused: false });
+  },
+  setCameraView: (kind, tag = null) => set({ cameraView: { kind, tag, nonce: get().cameraView.nonce + 1 } }),
   getDraft() {
     const st = get();
     return {
       pluginId: st.plugin.id,
+      pluginVersion: st.plugin.version,
       params: st.params,
       trials: st.trials,
       completedSteps: st.completedSteps,

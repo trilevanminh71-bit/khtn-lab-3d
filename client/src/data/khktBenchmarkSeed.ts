@@ -23,10 +23,11 @@ export function generateBenchmarkSeed(): SubmissionRecord[] {
   ];
   for (const g of groups) {
     for (let i = 1; i <= 40; i++) {
-      const plugin = BUILTIN_PLUGINS[Math.floor(rng() * BUILTIN_PLUGINS.length)];
+      // Cố định 12 bài và 21 ngộ nhận ban đầu để bộ dữ liệu mẫu không đổi khi bổ sung bài mới
+      const plugin = BUILTIN_PLUGINS[Math.floor(rng() * 12)];
       const pre = Math.round(clamp(g.preMu + 0.8 * gaussian(rng), 0, 3));
       const post = Math.round(clamp(Math.max(pre, g.postMu + 0.6 * gaussian(rng)), 0, 3));
-      const mis = MISCONCEPTIONS.filter((m) => m.subject === plugin.subject && rng() < (g.cls === '10T1' ? 0.12 : 0.3)).map((m) => m.id);
+      const mis = MISCONCEPTIONS.slice(0, 21).filter((m) => m.subject === plugin.subject && rng() < (g.cls === '10T1' ? 0.12 : 0.3)).map((m) => m.id);
       const code = `HS${String(i).padStart(2, '0')}`;
       const err = Math.round(clamp(g.errMu + 2.5 * gaussian(rng), 0.2, 40) * 10) / 10;
       out.push({

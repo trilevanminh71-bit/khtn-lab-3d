@@ -20,6 +20,15 @@ export interface SnapPoint {
   filled: boolean;
 }
 
+/** Vật trượt theo một trục: kéo trong 3D → cập nhật tham số `param` (toạ độ start/end theo hệ của vật cha) */
+export interface SlideSpec {
+  param: string;
+  start: THREE.Vector3;
+  end: THREE.Vector3;
+  min: number;
+  max: number;
+}
+
 /** Tay cầm của một cảnh đã dựng */
 export interface SceneHandle {
   root: THREE.Group;

@@ -41,6 +41,8 @@ const AiTutorDrawer = lazy(() => import('./components/AiTutorDrawer'));
 
 const TOAST_STYLE = { info: 'border-sky-500', success: 'border-ok', warning: 'border-amber-400', danger: 'border-danger' } as const;
 
+const PPE_TEXT = { goggles: 'đeo kính', gloves: 'đeo găng tay', labelCheck: 'đọc nhãn' } as const;
+
 const closeTutor = (): void => useLabStore.getState().setTutorOpen(false);
 
 export default function App() {
@@ -50,9 +52,13 @@ export default function App() {
   const khkt = useLabStore((s) => s.khktMode);
   const debug = useLabStore((s) => s.debugMode);
   const tutorOpen = useLabStore((s) => s.tutorOpen);
-  const incidents = useLabStore((s) => s.activeIncidents);
+  const activeIncidents = useLabStore((s) => s.activeIncidents);
+  const ppe = useLabStore((s) => s.ppe);
   const plugin = useLabStore((s) => s.plugin);
   const [glKey, setGlKey] = useState(0);
+  const missingPpe = plugin.ppeRequired.filter((k) => !ppe[k]);
+  // Cảnh báo bảo hộ chỉ hiện khi thật sự còn thiếu (trừ khi giám khảo giả lập trong chế độ KHKT)
+  const incidents = activeIncidents.filter((id) => id !== 'ppe-missing' || missingPpe.length > 0 || khkt);
 
   // Khởi động: nạp bài tùy biến + kiểm tra gói cập nhật từ xa
   useEffect(() => {
@@ -149,7 +155,7 @@ export default function App() {
               {incidents.map((id) => {
                 const def = plugin.incidents.find((d) => d.id === id);
                 const title = def?.title ?? (id === 'ppe-missing' ? 'Thiếu trang bị bảo hộ' : 'Sự cố giả lập');
-                const msg = def?.message ?? (id === 'ppe-missing' ? 'Hãy đeo đủ kính, găng tay và kiểm tra nhãn hóa chất trước khi thao tác.' : 'Giám khảo vừa kích hoạt sự cố giả lập để kiểm tra phản ứng an toàn.');
+                const msg = def?.message ?? (id === 'ppe-missing' ? `Còn thiếu: ${(missingPpe.length ? missingPpe : plugin.ppeRequired).map((k) => PPE_TEXT[k]).join(', ') || 'trang bị bảo hộ'}.` : 'Giám khảo vừa kích hoạt sự cố giả lập để kiểm tra phản ứng an toàn.');
                 return (
                   <div key={id} className="flex items-start gap-2 rounded-lg border-2 border-danger bg-red-950/90 p-2 text-sm text-red-100 shadow-lg">
                     <span className="text-lg" aria-hidden="true">⚠️</span>

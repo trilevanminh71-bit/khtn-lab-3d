@@ -143,22 +143,28 @@ function OptionParam({ p, value }: { p: ParamDef; value: number }) {
 export function ParamControls() {
   const plugin = useLabStore((s) => s.plugin);
   const params = useLabStore((s) => s.params);
+  const completed = useLabStore((s) => s.completedSteps);
+  const lockedKeys = plugin.steps.find((s) => !completed.includes(s.id))?.lockParams ?? [];
   return (
     <>
       {plugin.params
         .filter((p) => matchShowIf(p.showIf, params))
         .map((p) => {
           const value = params[p.key] ?? p.default;
+          const locked = lockedKeys.includes(p.key);
           if (p.options) return <OptionParam key={p.key} p={p} value={value} />;
           return (
             <div key={p.key}>
               <label className="flex justify-between text-xs" htmlFor={`param-${p.key}`} title={p.description}>
-                <span>{p.label}</span>
+                <span>
+                  {p.label}
+                  {locked && <span className="ml-1 text-slate-400">🔒 giữ nguyên</span>}
+                </span>
                 <b className="font-mono text-amber-200">
                   {fmtVi(value, 3)} {p.unit}
                 </b>
               </label>
-              <input id={`param-${p.key}`} type="range" className="w-full" min={p.min} max={p.max} step={p.step} value={value} onChange={(e) => useLabStore.getState().setParam(p.key, Number(e.target.value))} aria-valuetext={`${value} ${p.unit}`} />
+              <input id={`param-${p.key}`} type="range" className="w-full disabled:cursor-not-allowed disabled:opacity-40" disabled={locked} min={p.min} max={p.max} step={p.step} value={value} onChange={(e) => useLabStore.getState().setParam(p.key, Number(e.target.value))} aria-valuetext={`${value} ${p.unit}`} />
             </div>
           );
         })}

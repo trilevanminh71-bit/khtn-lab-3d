@@ -314,6 +314,8 @@ export const useLabStore = create<LabState>((set, get) => ({
   },
   setParam(key, value) {
     const st = get();
+    // Bước hiện tại yêu cầu giữ nguyên đại lượng này
+    if (st.plugin.steps[st.currentStepIndex()]?.lockParams?.includes(key)) return;
     const params = { ...st.params, [key]: value };
     const solver = getSolver(st.plugin.solverId);
     const ctx: SolveContext = { plugin: st.plugin, params, hidden: st.hidden, ppe: st.ppe, rng: mulberry32(st.seed) };
@@ -331,7 +333,9 @@ export const useLabStore = create<LabState>((set, get) => ({
     soundEngine.play('click');
     vibrate('tap');
     logAction('ppe', `${item}=${ppe[item]}`);
-    set({ ppe });
+    // Đã đủ bảo hộ → gỡ cảnh báo thiếu bảo hộ
+    const enough = get().plugin.ppeRequired.every((k) => ppe[k]);
+    set({ ppe, activeIncidents: enough ? get().activeIncidents.filter((x) => x !== 'ppe-missing') : get().activeIncidents });
   },
   currentStepIndex() {
     const { plugin, completedSteps } = get();

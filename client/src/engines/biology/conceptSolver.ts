@@ -191,7 +191,7 @@ export const enzymeConditionsSolver: LabSolver = {
     const prot = Math.round(p(ctx, 'enzyme')) === 0;
     return { values: { degree: roundTo(x, 1) }, visual: { ...enzymeVisual(ctx), tubeColor: prot ? (x > 30 ? '#f0f9ff' : x > 8 ? '#e2e8f0' : '#ffffff') : x > 30 ? '#d6b26e' : x > 8 ? '#7c6ca8' : '#312e81', tubeIndex: Math.round(p(ctx, 'cond')), animMs: 2600, readout: `Thủy phân ${vi(x, 1)}%` } };
   },
-  preview: (ctx) => ({ ...enzymeVisual(ctx), tubeColor: Math.round(p(ctx, 'enzyme')) === 0 ? '#ffffff' : '#312e81', tubeIndex: Math.round(p(ctx, 'cond')), animMs: 0, readout: at(COND_TEXT, p(ctx, 'cond'))[0] }),
+  preview: (ctx) => ({ ...enzymeVisual(ctx), tubeColor: Math.round(p(ctx, 'enzyme')) === 0 ? '#ffffff' : '#312e81', tubeIndex: Math.round(p(ctx, 'cond')), animMs: 0, readout: '' }),
   trueResult: (ctx) => h(ctx, 'cold', 0.25) * 100,
   estimateFromTrials(trials) {
     const last = trials[trials.length - 1];

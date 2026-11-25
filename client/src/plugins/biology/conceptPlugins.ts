@@ -222,13 +222,13 @@ export const enzymeConditionsPlugin: LabPluginDef = {
   minTrials: 4,
   result: { key: 'cold', label: 'Hoạt tính tương đối ở nước đá so với đối chứng', unit: '%', tolerancePercent: 8, decimals: 1, hint: 'Cùng một enzyme: (mức thủy phân mỗi phút ở nước đá) : (ở đối chứng) × 100%.' },
   steps: [
-    { id: 's1', title: 'Bảo hộ & kiểm tra nhãn', instruction: 'Đeo găng tay, kiểm tra nhãn dung dịch.', action: 'click', trigger: 'reagent-a', requiresPpe: true },
+    { id: 's1', title: 'Bảo hộ & kiểm tra nhãn', instruction: 'Đeo kính, găng tay và đọc nhãn dung dịch.', action: 'click', trigger: 'reagent-a', requiresPpe: true },
     { id: 's2', title: 'Đặt giá ống nghiệm', instruction: 'Kéo giá ống nghiệm vào bể ổn nhiệt.', action: 'snap', trigger: 'beaker-slot' },
-    { id: 's3', title: 'Chọn enzyme và điều kiện', instruction: 'Giữ nguyên thời gian, chỉ đổi điều kiện xử lí.', action: 'adjust' },
-    { id: 's4', title: 'Thêm enzyme – ghi mức thủy phân', instruction: 'Chạm vào lọ enzyme (hoặc nút Đo).', action: 'measure', trigger: 'reagent-b', requiresPpe: true },
-    { id: 's5', title: 'So sánh 4 điều kiện', instruction: 'Ghi đủ 4 điều kiện, giải thích và liên hệ thực tiễn.', action: 'record' }
+    { id: 's3', title: 'Chọn enzyme và điều kiện', instruction: 'Giữ nguyên thời gian, chỉ đổi điều kiện xử lí.', action: 'adjust', lockParams: ['time'] },
+    { id: 's4', title: 'Thêm enzyme – ghi mức thủy phân', instruction: 'Chạm vào lọ enzyme (hoặc nút Đo).', action: 'measure', trigger: 'reagent-b', requiresPpe: true, lockParams: ['time'] },
+    { id: 's5', title: 'So sánh 4 điều kiện', instruction: 'Giữ nguyên thời gian, ghi đủ 4 điều kiện, giải thích và liên hệ thực tiễn.', action: 'record', lockParams: ['time'] }
   ],
-  ppeRequired: ['gloves', 'labelCheck'],
+  ppeRequired: ['goggles', 'gloves', 'labelCheck'],
   chemicals: [
     { name: 'Dung dịch kiềm (NaOH loãng)', formula: 'NaOH', concentration: '0,1 M', hazards: ['Kích ứng da, mắt'] },
     { name: 'Dung dịch iodine', formula: 'I₂/KI', concentration: '0,1%', hazards: ['Nhuộm màu', 'Kích ứng mắt'] }

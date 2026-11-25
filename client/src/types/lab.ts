@@ -145,6 +145,8 @@ export interface StepDef {
   /** Bước này chỉ làm được khi đã trang bị đủ bảo hộ */
   requiresPpe?: boolean;
   hint?: string;
+  /** Khóa tham số phải giữ nguyên trong bước này (thanh trượt bị khóa) */
+  lockParams?: string[];
 }
 
 /** Câu hỏi trắc nghiệm trước/sau thí nghiệm (Pre/Post Quiz) */

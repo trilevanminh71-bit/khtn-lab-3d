@@ -229,7 +229,10 @@ export function buildBeakerScene(options: SceneOptions): SceneHandle {
     cameraPosition: new THREE.Vector3(0.3, 1.5, 2.4),
     cameraTarget: new THREE.Vector3(0, 0.3, 0),
     update(v: SceneVisualState, nonce: number) {
-      setLabelText(readout, vis.str(v, 'readout', '—'));
+      // Chuỗi rỗng = chưa có kết quả → ẩn nhãn nổi
+      const text = vis.str(v, 'readout', '—');
+      readout.visible = text !== '';
+      if (text) setLabelText(readout, text);
       const level = vis.num(v, 'liquidLevel', 0.5);
       if (variant !== 'tubes' && variant !== 'flask-syringe') {
         liquid.scale.y = Math.max(0.1, level / 0.55);

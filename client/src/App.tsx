@@ -7,6 +7,7 @@
  */
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
+import { LessonPicker } from './components/LessonPicker';
 import { LabHUD } from './components/LabHUD';
 import { TutorErrorBoundary } from './components/TutorErrorBoundary';
 import { SafetyPpeBar } from './components/SafetyPpeBar';
@@ -172,6 +173,7 @@ export default function App() {
       </main>
 
       {debug && <DevDebugPanel />}
+      {modal === 'lessons' && <LessonPicker />}
       <ConfirmDialogModal />
       <PinGuardModal />
       {settings.showOnboarding && <OnboardingTour />}
@@ -198,7 +200,7 @@ export default function App() {
         </TutorErrorBoundary>
       )}
 
-      <div className="pointer-events-none fixed bottom-3 left-1/2 z-[60] flex w-[min(92vw,420px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
+      <div className="pointer-events-none fixed top-16 left-1/2 z-[60] flex w-[min(92vw,420px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`pointer-events-auto rounded-lg border-l-4 bg-slate-900/95 px-3 py-2 text-sm text-slate-100 shadow-lg ${TOAST_STYLE[t.kind]}`} onClick={() => useLabStore.getState().dismissToast(t.id)}>
             {t.text}

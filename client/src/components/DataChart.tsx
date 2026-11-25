@@ -255,14 +255,14 @@ export function DataChart({ plugin, trials, def, mode = 'screen' }: { plugin: La
 }
 
 /** Các biểu đồ có dữ liệu của bài */
-export function ChartGrid({ plugin, trials, mode = 'screen' }: { plugin: LabPluginDef; trials: TrialRecord[]; mode?: 'screen' | 'print' }) {
+export function ChartGrid({ plugin, trials, mode = 'screen', limit, skip = 0, empty }: { plugin: LabPluginDef; trials: TrialRecord[]; mode?: 'screen' | 'print'; limit?: number; skip?: number; empty?: string }) {
   const charts = useMemo(() => {
     const defs = plugin.charts?.length
       ? plugin.charts
       : plugin.measurements.slice(0, 1).map((m): ChartDef => ({ id: 'auto', title: `${m.label} theo lần đo`, kind: 'line', x: 'index', y: m.key, xLabel: 'Lần đo', yLabel: m.unit ? `${m.label} (${m.unit})` : m.label }));
-    return defs.filter((d) => chartSeries(plugin, trials, d).length > 0);
-  }, [plugin, trials]);
-  if (!charts.length) return null;
+    return defs.filter((d) => chartSeries(plugin, trials, d).length > 0).slice(skip, limit === undefined ? undefined : skip + limit);
+  }, [plugin, trials, skip, limit]);
+  if (!charts.length) return empty ? <p className="text-sm text-slate-400">{empty}</p> : null;
   return (
     <div className={`grid gap-3 ${mode === 'print' ? 'sm:grid-cols-2' : ''}`}>
       {charts.map((d) => (

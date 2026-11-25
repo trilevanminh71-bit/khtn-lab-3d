@@ -6,11 +6,11 @@ import { useEffect, useState } from 'react';
 import { useLabStore } from '../store/useLabStore';
 
 const STEPS = [
-  { target: 'subjects', title: '1. Chọn môn học', text: 'Chọn Vật lí, Hóa học hoặc Sinh học. Mỗi môn có 4 bài thí nghiệm chuẩn SGK Kết nối tri thức 10.' },
-  { target: 'canvas', title: '2. Không gian 3D', text: 'Kéo để xoay, cuộn hoặc chụm 2 ngón để phóng to. Dụng cụ phát sáng xanh là dụng cụ cần thao tác ở bước hiện tại. Kéo dụng cụ vào vòng tròn xanh để lắp ráp.' },
-  { target: 'ppe', title: '3. An toàn trước tiên', text: 'Bật kính bảo hộ, găng tay và kiểm tra nhãn hóa chất trước khi làm thí nghiệm hóa – sinh. Thiếu bảo hộ sẽ bị trừ điểm.' },
-  { target: 'hud', title: '4. Bảng thí nghiệm', text: 'Theo dõi các bước, chỉnh thông số, bấm Đo để ghi số liệu, tự tính kết quả và viết kết luận. Bài tự lưu mỗi 5 giây.' },
-  { target: 'teacher', title: '5. Nộp bài & Cổng giáo viên', text: 'Nộp bài để nhận phiếu điểm chi tiết và mã QR. Giáo viên quét QR để thu bài không cần mạng.' }
+  { target: 'subjects', title: '1. Chọn môn học', text: 'Bấm Vật lí, Hóa học hoặc Sinh học để xem danh sách bài và chọn bài.' },
+  { target: 'canvas', title: '2. Không gian 3D', text: 'Kéo để xoay, chụm 2 ngón để phóng to. Dụng cụ phát sáng là dụng cụ cần chạm.' },
+  { target: 'ppe', title: '3. An toàn trước tiên', text: 'Bài có hóa chất sẽ hiện thanh bảo hộ: đeo kính, đeo găng, đọc nhãn trước khi làm.' },
+  { target: 'hud', title: '4. Bảng thí nghiệm', text: 'Mỗi bước có một nút chính màu xanh. Cứ làm lần lượt, bài tự lưu.' },
+  { target: 'teacher', title: '5. Menu', text: 'Cài đặt, so sánh thí nghiệm và Cổng giáo viên nằm trong Menu. Làm xong, mở phần Kết quả để nộp bài.' }
 ];
 
 export function OnboardingTour() {

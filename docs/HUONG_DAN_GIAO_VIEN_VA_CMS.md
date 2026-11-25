@@ -1,7 +1,7 @@
 # Hướng dẫn giáo viên — Quản lý lớp, thu bài QR, CMS & số liệu KHKT
 
 ## 1. Vào Cổng giáo viên
-Nút **Cổng GV** → nhập PIN (mặc định **2026**). Phiên PIN có hiệu lực 30 phút. Sai 5 lần bị khóa 30 giây.
+**Menu → Cổng giáo viên** → nhập PIN (mặc định **2026**). Phiên PIN có hiệu lực 30 phút. Sai 5 lần bị khóa 30 giây.
 **Đổi PIN ngay:** ⚙ Cài đặt → Đổi mã PIN (PIN chỉ lưu dạng băm SHA-256).
 
 ## 2. Thu bài

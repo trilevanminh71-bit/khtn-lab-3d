@@ -9,9 +9,9 @@ import { ModalShell } from './ModalShell';
 import type { PpeItem } from '../types/lab';
 
 const ITEMS: Array<{ key: PpeItem; label: string; Icon: typeof Glasses }> = [
-  { key: 'goggles', label: 'Kính bảo hộ', Icon: Glasses },
-  { key: 'gloves', label: 'Găng tay', Icon: Hand },
-  { key: 'labelCheck', label: 'Kiểm tra nhãn', Icon: Tag }
+  { key: 'goggles', label: 'Đeo kính', Icon: Glasses },
+  { key: 'gloves', label: 'Đeo găng', Icon: Hand },
+  { key: 'labelCheck', label: 'Đọc nhãn', Icon: Tag }
 ];
 
 export function SafetyPpeBar() {
@@ -26,23 +26,25 @@ export function SafetyPpeBar() {
     else useLabStore.getState().togglePpe(k);
   };
 
+  if (required.length === 0) return null;
+
   return (
-    <div className="no-print flex flex-wrap items-center gap-1.5 border-b border-slate-800 bg-slate-900 px-2 py-1" data-tour="ppe">
+    <div className="no-print flex items-center gap-1.5 border-b border-slate-800 bg-slate-900 px-2 py-1" data-tour="ppe">
       <span className={`flex items-center gap-1 text-xs font-semibold ${missing.length ? 'text-warn' : 'text-ok'}`}>
-        <ShieldAlert size={14} /> {required.length === 0 ? 'Bài không yêu cầu bảo hộ đặc biệt' : missing.length ? `Cần thêm ${missing.length} trang bị` : 'Đã an toàn'}
+        <ShieldAlert size={15} /> <span className="hidden sm:inline">{missing.length ? 'Bảo hộ trước khi làm:' : 'Đã đủ bảo hộ'}</span>
       </span>
-      {ITEMS.map(({ key, label, Icon }) => {
+      {ITEMS.filter((x) => required.includes(x.key)).map(({ key, label, Icon }) => {
         const on = ppe[key];
         const need = required.includes(key);
         return (
           <button
             key={key}
-            className={`btn min-h-[32px] px-2 py-1 text-xs ${on ? 'border-ok bg-emerald-900/50 text-ok' : need ? 'border-amber-500/70' : ''}`}
+            className={`btn min-h-[40px] flex-1 px-2 py-1 text-xs sm:flex-none ${on ? 'border-ok bg-emerald-900/50 text-ok' : need ? 'border-amber-500/70' : ''}`}
             onClick={() => onItem(key)}
             aria-pressed={on}
             title={need ? `${label} (bắt buộc cho bài này)` : label}
           >
-            <Icon size={14} /> {label} {on ? '✓' : need ? '!' : ''}
+            <Icon size={14} /> {label} {on ? '✓' : ''}
           </button>
         );
       })}

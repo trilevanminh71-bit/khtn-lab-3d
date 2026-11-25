@@ -37,6 +37,7 @@ export type ModalId =
   | 'settings'
   | 'meniscus'
   | 'worksheet'
+  | 'lessons'
   | 'session'
   | 'onboarding';
 
@@ -147,6 +148,8 @@ export interface LabState {
   /** Trạng thái hiển thị của lần đo gần nhất (để phát lại) */
   lastMeasureVisual: SceneVisualState | null;
   cameraView: { kind: CameraViewKind; tag: string | null; nonce: number };
+  /** Môn đang xem trong danh sách bài */
+  pickerSubject: SubjectId;
 
   setPlugins(list: LabPluginDef[]): void;
   setSubject(s: SubjectId): void;
@@ -191,6 +194,7 @@ export interface LabState {
   setOnline(on: boolean): void;
   setServerOnline(on: boolean): void;
   openModal(m: ModalId): void;
+  openLessons(s: SubjectId): void;
   closeModal(): void;
   askConfirm(c: ConfirmRequest): void;
   closeConfirm(): void;
@@ -280,6 +284,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   simPaused: false,
   simStepNonce: 0,
   cameraView: { kind: 'overview', tag: null, nonce: 0 },
+  pickerSubject: BUILTIN_PLUGINS[0].subject,
 
   setPlugins(list) {
     const cur = get().plugin.id;
@@ -318,9 +323,8 @@ export const useLabStore = create<LabState>((set, get) => ({
     } catch {
       /* biểu thức No-Code lỗi → giữ cảnh cũ */
     }
-    const cur = st.plugin.steps[st.currentStepIndex()];
-    const completed = cur && cur.action === 'adjust' ? [...st.completedSteps, cur.id] : st.completedSteps;
-    set({ params, visual, completedSteps: completed });
+    // Bước chọn thông số chỉ hoàn thành khi bấm nút chính, để bảng không nhảy giữa lúc đang kéo
+    set({ params, visual });
   },
   togglePpe(item) {
     const ppe = { ...get().ppe, [item]: !get().ppe[item] };
@@ -363,7 +367,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     }
     if (!step) return { ok: false, message: 'Đã hoàn thành mọi bước. Hãy nộp phiếu báo cáo.' };
     if (step.trigger && step.trigger !== tag) {
-      return { ok: false, message: `Chưa đến lúc thao tác dụng cụ này. Bước hiện tại: "${step.title}".` };
+      return { ok: false, message: `Chưa tới dụng cụ này. Hãy làm: ${step.title}.` };
     }
     return st.performCurrentStep();
   },
@@ -380,27 +384,27 @@ export const useLabStore = create<LabState>((set, get) => ({
         const inc = st.activeIncidents.includes('ppe-missing') ? st.activeIncidents : [...st.activeIncidents, 'ppe-missing'];
         set({ activeIncidents: inc, incidentCount: st.incidentCount + 1 });
         logAction('incident', 'ppe-missing');
-        return { ok: false, message: 'Sự cố an toàn: chưa trang bị đủ bảo hộ trên thanh An toàn!' };
+        return { ok: false, message: 'Chưa đủ bảo hộ! Bật ở thanh phía trên.' };
       }
     }
     if (step.action === 'measure') return st.takeMeasurement();
     if (step.action === 'record') {
       if (st.trials.length < st.plugin.minTrials) {
-        return { ok: false, message: `Cần đo ít nhất ${st.plugin.minTrials} lần (hiện có ${st.trials.length}).` };
+        return { ok: false, message: `Cần đo thêm ${st.plugin.minTrials - st.trials.length} lần.` };
       }
     }
     soundEngine.play(step.action === 'snap' ? 'snap' : 'click');
     vibrate(step.action === 'snap' ? 'snap' : 'tap');
     logAction('step', step.id);
     set({ completedSteps: [...st.completedSteps, step.id] });
-    return { ok: true, message: `Hoàn thành: ${step.title}` };
+    return { ok: true, message: `✓ Xong: ${step.title}` };
   },
   takeMeasurement() {
     const st = get();
     const measureIdx = st.plugin.steps.findIndex((s) => s.action === 'measure');
     const cur = st.currentStepIndex();
     if (measureIdx >= 0 && cur < measureIdx) {
-      return { ok: false, message: `Hãy hoàn thành bước "${st.plugin.steps[cur].title}" trước khi đo.` };
+      return { ok: false, message: `Trước khi đo, hãy làm: ${st.plugin.steps[cur].title}.` };
     }
     const solver = getSolver(st.plugin.solverId);
     const rngSeed = (st.seed ^ Math.imul(st.trials.length + 1, 2654435761) ^ hashString(JSON.stringify(st.params))) >>> 0;
@@ -417,13 +421,13 @@ export const useLabStore = create<LabState>((set, get) => ({
     }
     if (danger) {
       set({ visual: { ...st.visual, danger: true }, visualNonce: st.visualNonce + 1 });
-      return { ok: false, message: 'Đã dừng phép đo vì nguy hiểm! Điều chỉnh thông số rồi đo lại.' };
+      return { ok: false, message: 'Dừng đo vì không an toàn. Chỉnh lại thông số.' };
     }
     const measureStep = st.plugin.steps.find((s) => s.action === 'measure');
     if (measureStep?.requiresPpe && st.plugin.ppeRequired.some((k) => !st.ppe[k])) {
       soundEngine.play('alarm');
       set({ activeIncidents: [...new Set([...get().activeIncidents, 'ppe-missing'])], incidentCount: get().incidentCount + 1 });
-      return { ok: false, message: 'Sự cố an toàn: cần đủ bảo hộ trước khi thao tác hóa chất!' };
+      return { ok: false, message: 'Chưa đủ bảo hộ! Bật ở thanh phía trên.' };
     }
     let result;
     try {
@@ -444,7 +448,7 @@ export const useLabStore = create<LabState>((set, get) => ({
         return `${m?.label ?? k}: ${m?.valueLabels?.[String(v)] ?? `${String(v).replace('.', ',')}${m?.unit ? ` ${m.unit}` : ''}`}`;
       })
       .join('; ');
-    return { ok: true, message: `Lần đo ${trial.index}: ${describe}` };
+    return { ok: true, message: Object.keys(result.values).length > 2 ? `Đã ghi lần đo ${trial.index}.` : `Lần đo ${trial.index}: ${describe}` };
   },
   deleteTrial(index) {
     const trials = get()
@@ -523,7 +527,7 @@ export const useLabStore = create<LabState>((set, get) => ({
       set({ simPaused: false });
       return { ok: true, message: 'Tiếp tục hoạt cảnh.' };
     }
-    if (!st.lastMeasureVisual) return { ok: false, message: 'Chưa có lần đo nào để chạy. Hãy thực hiện bước đo trước.' };
+    if (!st.lastMeasureVisual) return { ok: false, message: 'Chưa có lần đo nào. Hãy bấm Đo trước.' };
     set({ visual: st.lastMeasureVisual, visualNonce: st.visualNonce + 1 });
     return { ok: true, message: 'Phát lại lần đo gần nhất.' };
   },
@@ -613,12 +617,13 @@ export const useLabStore = create<LabState>((set, get) => ({
   setOnline: (on) => set({ online: on }),
   setServerOnline: (on) => set({ serverOnline: on }),
   openModal: (m) => set({ modal: m }),
+  openLessons: (s) => set({ modal: 'lessons', pickerSubject: s }),
   closeModal: () => set({ modal: null }),
   askConfirm: (c) => set({ confirm: c }),
   closeConfirm: () => set({ confirm: null }),
   toast(kind, text) {
     const id = toastId++;
-    set({ toasts: [...get().toasts.slice(-3), { id, kind, text }] });
+    set({ toasts: [...get().toasts.slice(-1), { id, kind, text }] });
     setTimeout(() => get().dismissToast(id), 4500);
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),

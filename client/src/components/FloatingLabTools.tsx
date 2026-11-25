@@ -5,7 +5,7 @@
  *    có thể chèn trung bình các cột số liệu đo; nút "Điền vào Kết quả".
  */
 import { useState } from 'react';
-import { Calculator, NotebookPen, X } from 'lucide-react';
+import { Bot, Calculator, NotebookPen, Wrench, X } from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
 import { evaluateFormula } from '../engines/formulaEvaluator';
 import { mean } from '../engines/statistics';
@@ -23,6 +23,7 @@ export function FloatingLabTools() {
   const [expr, setExpr] = useState('');
   const [ans, setAns] = useState(0);
   const [out, setOut] = useState('');
+  const [menu, setMenu] = useState(false);
   const st = useLabStore.getState;
 
   const evaluate = (): void => {
@@ -38,15 +39,22 @@ export function FloatingLabTools() {
 
   if (!open) {
     return (
-      <div className="no-print absolute bottom-3 right-3 z-10 flex flex-col gap-2">
-        <button className="btn rounded-full p-3 shadow-lg" onClick={() => { setTab('calc'); st().setToolsOpen(true); }} title="Máy tính khoa học" aria-label="Mở máy tính khoa học">
-          <Calculator size={20} />
-        </button>
-        <button className="btn rounded-full p-3 shadow-lg" onClick={() => { setTab('notes'); st().setToolsOpen(true); }} title="Sổ tay thí nghiệm" aria-label="Mở sổ tay thí nghiệm">
-          <NotebookPen size={20} />
-        </button>
-        <button className="btn-primary rounded-full p-3 shadow-lg" onClick={() => st().setTutorOpen(true)} title="Trợ lý AI Socratic" aria-label="Mở trợ lý AI">
-          🤖
+      <div className="no-print absolute bottom-2 right-2 z-10 flex flex-col items-end gap-1.5">
+        {menu && (
+          <div className="panel flex flex-col gap-1 p-1.5">
+            <button className="btn min-h-[44px] justify-start" onClick={() => { setMenu(false); st().setTutorOpen(true); }}>
+              <Bot size={17} /> Hỏi trợ lý AI
+            </button>
+            <button className="btn min-h-[44px] justify-start" onClick={() => { setMenu(false); setTab('calc'); st().setToolsOpen(true); }}>
+              <Calculator size={17} /> Máy tính
+            </button>
+            <button className="btn min-h-[44px] justify-start" onClick={() => { setMenu(false); setTab('notes'); st().setToolsOpen(true); }}>
+              <NotebookPen size={17} /> Sổ tay
+            </button>
+          </div>
+        )}
+        <button className="btn min-h-[46px] rounded-full px-3 shadow-lg" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Công cụ">
+          {menu ? <X size={18} /> : <Wrench size={18} />} <span className="hidden sm:inline">Công cụ</span>
         </button>
       </div>
     );

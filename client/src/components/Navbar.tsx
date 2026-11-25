@@ -1,13 +1,14 @@
 /**
- * components/Navbar.tsx — Thanh điều hướng: chọn môn, trạng thái (chất lượng render / máy chủ LAN / offline),
- * Hướng dẫn (?), So sánh 3D (split-screen), KHKT Mode (PIN), Cổng giáo viên (PIN), Cài đặt.
+ * components/Navbar.tsx — Thanh trên cùng gọn: 3 môn học (mở danh sách bài), Trợ giúp và menu phụ.
+ * Menu phụ chứa: So sánh 3D, Cổng giáo viên (PIN), Chế độ KHKT (PIN), Cài đặt, trạng thái mạng / máy chủ / đồ họa.
  */
-import { Atom, BookOpen, Columns2, FlaskConical, GraduationCap, HelpCircle, Microscope, MonitorCog, Settings, Trophy, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BookOpen, Columns2, HelpCircle, Menu, Settings, Trophy, WifiOff } from 'lucide-react';
 import { APP_CONFIG, SUBJECT_LABELS } from '../config/appConfig';
-import { hasUnsavedWork, useLabStore } from '../store/useLabStore';
+import { useLabStore } from '../store/useLabStore';
+import { SUBJECT_ICONS } from './LessonPicker';
 import type { SubjectId } from '../types/lab';
 
-const SUBJECT_ICONS = { physics: Atom, chemistry: FlaskConical, biology: Microscope } as const;
 const QUALITY_LABEL = ['Máy yếu', 'Trung bình', 'Cao'];
 
 export function Navbar() {
@@ -17,65 +18,80 @@ export function Navbar() {
   const quality = useLabStore((s) => s.qualityLevel);
   const split = useLabStore((s) => s.splitScreen);
   const khkt = useLabStore((s) => s.khktMode);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const st = useLabStore.getState;
 
-  const chooseSubject = (s: SubjectId): void => {
-    if (s === subject) return;
-    if (hasUnsavedWork()) {
-      st().askConfirm({
-        title: 'Chuyển môn học?',
-        message: 'Em đang làm dở bài thí nghiệm. Bản nháp đã tự lưu, có thể mở lại bài để làm tiếp. Vẫn chuyển?',
-        confirmLabel: 'Chuyển môn',
-        onConfirm: () => st().setSubject(s)
-      });
-    } else st().setSubject(s);
-  };
+  // Bấm ra ngoài hoặc Esc → đóng menu
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent): void => {
+      if (!menuRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const items: Array<{ label: string; Icon: typeof Settings; on?: boolean; run: () => void }> = [
+    { label: 'Cổng giáo viên', Icon: BookOpen, run: () => st().requestPin('teacher') },
+    { label: split ? 'Tắt so sánh 2 thí nghiệm' : 'So sánh 2 thí nghiệm', Icon: Columns2, on: split, run: () => st().setSplitScreen(!split) },
+    { label: khkt ? 'Tắt chế độ KHKT' : 'Chế độ KHKT', Icon: Trophy, on: khkt, run: () => (khkt ? st().setKhktMode(false) : st().requestPin('khkt')) },
+    { label: 'Cài đặt', Icon: Settings, run: () => st().openModal('settings') }
+  ];
 
   return (
-    <header className="no-print flex flex-wrap items-center gap-1.5 border-b border-slate-800 bg-slate-950 px-2 py-1.5 sm:gap-2 sm:px-3" data-tour="navbar">
-      <div className="flex items-center gap-2 pr-1">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-lab-700 text-lg" aria-hidden="true">🧪</span>
-        <div className="hidden leading-tight sm:block">
-          <div className="text-sm font-bold">{APP_CONFIG.appName}</div>
-          <div className="text-[11px] text-slate-400">{APP_CONFIG.appTagline}</div>
-        </div>
-      </div>
-      <nav className="flex gap-1" aria-label="Chọn môn học" data-tour="subjects">
+    <header className="no-print flex items-center gap-1.5 border-b border-slate-800 bg-slate-950 px-2 py-1.5 sm:gap-2 sm:px-3" data-tour="navbar">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-lab-700 text-lg" aria-hidden="true">🧪</span>
+      <span className="hidden text-sm font-bold md:block">{APP_CONFIG.appName}</span>
+      <nav className="flex min-w-0 flex-1 justify-center gap-1" aria-label="Chọn môn học" data-tour="subjects">
         {(Object.keys(SUBJECT_LABELS) as SubjectId[]).map((s) => {
           const Icon = SUBJECT_ICONS[s];
           return (
-            <button key={s} className={`btn px-2 sm:px-3 ${subject === s ? 'border-lab-400 bg-lab-700 text-white' : ''}`} onClick={() => chooseSubject(s)} aria-pressed={subject === s}>
-              <Icon size={16} />
-              <span className="hidden sm:inline">{SUBJECT_LABELS[s]}</span>
+            <button key={s} className={`btn min-h-[44px] flex-col gap-0 px-2 py-0.5 text-[11px] sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm ${subject === s ? 'border-lab-400 bg-lab-700 text-white' : ''}`} onClick={() => st().openLessons(s)} aria-current={subject === s} title={`Danh sách bài ${SUBJECT_LABELS[s]}`}>
+              <Icon size={17} /> {SUBJECT_LABELS[s]}
             </button>
           );
         })}
       </nav>
-      <div className="ml-auto flex flex-wrap items-center gap-1">
-        <span className="chip hidden bg-slate-800 text-slate-300 md:inline-flex" title="Chất lượng hiển thị 3D (tự thích ứng)">
-          <MonitorCog size={13} /> {QUALITY_LABEL[quality]}
+      {!online && (
+        <span className="chip bg-amber-900/60 text-warn" title="Không có mạng — vẫn làm thí nghiệm bình thường">
+          <WifiOff size={13} /> <span className="hidden sm:inline">Không có mạng</span>
         </span>
-        <span className={`chip ${server ? 'bg-emerald-900/60 text-ok' : 'bg-slate-800 text-slate-400'}`} title={server ? 'Đã kết nối máy chủ lớp (LAN)' : 'Chưa kết nối máy chủ — bài nộp lưu trên máy & mã QR'}>
-          <GraduationCap size={13} /> <span className="hidden sm:inline">{server ? 'LAN' : 'Không LAN'}</span>
-        </span>
-        <span className={`chip ${online ? 'bg-sky-900/50 text-sky-300' : 'bg-amber-900/60 text-warn'}`} title={online ? 'Đang có Internet' : 'Đang offline — mọi chức năng chính vẫn hoạt động'}>
-          {online ? <Wifi size={13} /> : <WifiOff size={13} />} <span className="hidden sm:inline">{online ? 'Trực tuyến' : 'Offline'}</span>
-        </span>
-        <button className="btn-ghost px-2" onClick={() => st().openModal('guide')} title="Trung tâm hướng dẫn" aria-label="Hướng dẫn">
-          <HelpCircle size={18} />
+      )}
+      <button className="btn min-h-[44px] px-2.5" onClick={() => st().openModal('guide')} aria-label="Trợ giúp">
+        <HelpCircle size={18} /> <span className="hidden sm:inline">Trợ giúp</span>
+      </button>
+      <div className="relative" ref={menuRef}>
+        <button className="btn min-h-[44px] px-2.5" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" aria-label="Menu" data-tour="teacher">
+          <Menu size={18} /> <span className="hidden sm:inline">Menu</span>
         </button>
-        <button className={`btn-ghost px-2 ${split ? 'text-lab-400' : ''}`} onClick={() => st().setSplitScreen(!split)} title="So sánh 2 thí nghiệm 3D cạnh nhau" aria-label="So sánh 3D" aria-pressed={split}>
-          <Columns2 size={18} />
-        </button>
-        <button className={`btn-ghost px-2 ${khkt ? 'text-amber-300' : ''}`} onClick={() => (khkt ? st().setKhktMode(false) : st().requestPin('khkt'))} title="Chế độ trình diễn KHKT" aria-label="Chế độ KHKT" aria-pressed={khkt}>
-          <Trophy size={18} />
-        </button>
-        <button className="btn px-2" onClick={() => st().requestPin('teacher')} title="Cổng giáo viên" data-tour="teacher">
-          <BookOpen size={16} /> <span className="hidden sm:inline">Cổng GV</span>
-        </button>
-        <button className="btn-ghost px-2" onClick={() => st().openModal('settings')} title="Cài đặt" aria-label="Cài đặt">
-          <Settings size={18} />
-        </button>
+        {open && (
+          <div className="card absolute right-0 top-full z-40 mt-1 w-60 p-1.5" role="menu">
+            {items.map(({ label, Icon, on, run }) => (
+              <button
+                key={label}
+                role="menuitem"
+                className={`flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-slate-800 ${on ? 'text-lab-400' : ''}`}
+                onClick={() => {
+                  setOpen(false);
+                  run();
+                }}
+              >
+                <Icon size={17} /> {label}
+              </button>
+            ))}
+            <p className="mt-1 border-t border-slate-700 px-3 py-2 text-xs text-slate-400">
+              Mạng: {online ? 'có' : 'không có'} · Máy chủ lớp: {server ? 'đã kết nối' : 'chưa kết nối'} · Đồ họa: {QUALITY_LABEL[quality]}
+            </p>
+          </div>
+        )}
       </div>
     </header>
   );

@@ -1,12 +1,13 @@
 /**
  * components/LabHUD.tsx — Bảng điều khiển thí nghiệm, TỰ THÍCH ỨNG màn hình ngang/dọc:
+ *  - Mỗi lúc chỉ một hành động chính theo bước; nội dung phụ nằm trong các mục mở rộng.
  *  - Ngang / máy tính: cột bên phải; Dọc / điện thoại: ngăn dưới cảnh 3D, chia tab.
  *  - Chọn bài, phiên học sinh, Pre-Quiz, quy trình các bước, thông số, nút Đo (chống bấm đúp),
  *    bảng số liệu + thống kê, kết quả & kết luận, nút Về góc nhìn chuẩn, Làm lại (xác nhận), Nộp bài.
  *  - Tự lưu nháp mỗi 5 giây vào IndexedDB; thẻ "Tiếp tục bài đang làm dở"; biểu đồ và phiếu thí nghiệm.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Calculator, Camera, CheckCircle2, Circle, ClipboardCheck, Eye, FileText, Play, Printer, RotateCcw, Ruler, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Bot, Calculator, Camera, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Eye, FileText, Play, Printer, RotateCcw, Ruler, UserRound } from 'lucide-react';
 import { hasUnsavedWork, useLabStore } from '../store/useLabStore';
 import { APP_CONFIG, SUBJECT_COLORS } from '../config/appConfig';
 import { clearDraft, saveDraft } from '../offline/db';
@@ -140,9 +141,22 @@ export function QuizPanel({ phase, questions, onDone }: { phase: 'pre' | 'post';
   );
 }
 
+/** Mục mở rộng: giữ màn hình thoáng, nội dung phụ chỉ hiện khi cần */
+function More({ title, open, children }: { title: string; open?: boolean; children: ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-slate-700" open={open}>
+      <summary className="flex min-h-[42px] cursor-pointer list-none items-center justify-between px-3 text-sm font-semibold text-slate-200 hover:bg-slate-800">
+        {title}
+        <ChevronDown size={16} className="text-slate-400 transition group-open:rotate-180" />
+      </summary>
+      <div className="space-y-2 p-2 pt-1">{children}</div>
+    </details>
+  );
+}
+
 /* --------------------------------- HUD ---------------------------------- */
 export function LabHUD() {
-  const plugins = useLabStore((s) => s.plugins);
+  const ppe = useLabStore((s) => s.ppe);
   const subject = useLabStore((s) => s.subject);
   const plugin = useLabStore((s) => s.plugin);
   const session = useLabStore((s) => s.session);
@@ -153,13 +167,12 @@ export function LabHUD() {
   const modal = useLabStore((s) => s.modal);
   const submitted = useLabStore((s) => s.submitted);
   const [tab, setTab] = useState<Tab>('steps');
-  const [showTheory, setShowTheory] = useState(false);
+  const [quizOpen, setQuizOpen] = useState(false);
   const [showPre, setShowPre] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const st = useLabStore.getState;
   const stepIdx = Math.min(plugin.steps.length, plugin.steps.findIndex((s) => !completed.includes(s.id)) === -1 ? plugin.steps.length : plugin.steps.findIndex((s) => !completed.includes(s.id)));
   const currentStep = plugin.steps[stepIdx];
-  const list = plugins.filter((p) => p.subject === subject);
   const lastPluginId = useRef<string>('');
 
   // Mở bài: hiện Pre-Quiz (nháp dở được mời làm tiếp bằng thẻ ResumeCard)
@@ -167,6 +180,7 @@ export function LabHUD() {
     if (lastPluginId.current === plugin.id) return;
     lastPluginId.current = plugin.id;
     setTab('steps');
+    setQuizOpen(false);
     setShowPre(!useLabStore.getState().preSubmitted && plugin.preQuiz.length > 0);
   }, [plugin]);
 
@@ -195,13 +209,6 @@ export function LabHUD() {
   useEffect(() => {
     if (!useLabStore.getState().session && !useLabStore.getState().settings.showOnboarding) st().openModal('session');
   }, [st]);
-
-  const choosePlugin = (id: string): void => {
-    if (id === plugin.id) return;
-    if (hasUnsavedWork()) {
-      st().askConfirm({ title: 'Chuyển bài thí nghiệm?', message: 'Bài đang làm dở đã được tự lưu nháp. Chuyển sang bài khác?', confirmLabel: 'Chuyển bài', onConfirm: () => st().loadPlugin(id) });
-    } else st().loadPlugin(id);
-  };
 
   const doStep = (): void => {
     const r = st().performCurrentStep();
@@ -233,174 +240,229 @@ export function LabHUD() {
     [trials, plugin]
   );
 
+  const missingPpe = currentStep?.requiresPpe ? plugin.ppeRequired.filter((k) => !ppe[k]) : [];
+  const need = Math.max(0, plugin.minTrials - trials.length);
+  /** Một hành động chính duy nhất cho bước hiện tại */
+  const primary: { label: string; run: () => void; icon: typeof Play } = submitted
+    ? { label: 'Xem phiếu báo cáo', run: () => st().openModal('report'), icon: FileText }
+    : !currentStep
+      ? { label: 'Nhập kết quả', run: () => setTab('result'), icon: CheckCircle2 }
+      : currentStep.action === 'measure'
+        ? { label: 'Đo', run: doMeasure, icon: Ruler }
+        : currentStep.action === 'record'
+          ? need > 0
+            ? { label: `Đo tiếp (còn ${need} lần)`, run: doMeasure, icon: Ruler }
+            : { label: 'Đã đo đủ, tiếp tục', run: doStep, icon: CheckCircle2 }
+          : currentStep.action === 'adjust'
+            ? { label: 'Chọn xong, tiếp tục', run: doStep, icon: CheckCircle2 }
+            : { label: 'Làm bước này', run: doStep, icon: Play };
+  const PrimaryIcon = primary.icon;
+  const tuning = !currentStep || ['adjust', 'measure', 'record'].includes(currentStep.action);
+  const measured = plugin.steps.some((x) => x.action === 'measure' && completed.includes(x.id));
+  const conceptual = ['molecule', 'cell', 'membrane', 'signal'].includes(plugin.sceneTemplate);
+
   return (
-    <aside className="panel no-print m-1 flex min-h-0 flex-col landscape:w-[380px] lg:w-[400px] lg:max-w-[40vw] portrait:max-h-[52vh]" data-tour="hud" aria-label="Bảng điều khiển thí nghiệm">
-      {/* Đầu bảng: chọn bài + học sinh */}
+    <aside className="panel no-print m-1 flex min-h-0 flex-col landscape:w-[380px] lg:w-[400px] lg:max-w-[40vw] portrait:max-h-[54vh]" data-tour="hud" aria-label="Bảng điều khiển thí nghiệm">
       <div className="space-y-1.5 border-b border-slate-700 p-2">
         <div className="flex gap-1.5">
-          <select className="input py-1.5" value={plugin.id} onChange={(e) => choosePlugin(e.target.value)} aria-label="Chọn bài thí nghiệm" style={{ borderLeft: `4px solid ${SUBJECT_COLORS[subject]}` }}>
-            {list.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.shortTitle}
-                {p.source !== 'builtin' ? ' (tùy biến)' : ''}
-              </option>
-            ))}
-          </select>
-          <button className="btn px-2" onClick={() => st().openModal('session')} title="Thông tin học sinh" aria-label="Thông tin học sinh">
-            <UserRound size={16} />
+          <button className="btn min-h-[44px] min-w-0 flex-1 justify-between text-left" onClick={() => st().openLessons(subject)} aria-label={`Đổi bài. Đang mở: ${plugin.shortTitle}`} style={{ borderLeft: `4px solid ${SUBJECT_COLORS[subject]}` }}>
+            <span className="truncate font-semibold">{plugin.shortTitle}</span>
+            <span className="shrink-0 text-xs text-lab-400">Đổi bài</span>
+          </button>
+          <button className="btn min-h-[44px] px-2.5" onClick={() => st().openModal('session')} aria-label="Thông tin học sinh" title={session ? `${session.studentName} · ${session.classCode}/${session.studentCode}` : 'Nhập tên và lớp'}>
+            <UserRound size={17} /> {!session && <span className="text-xs">Nhập tên</span>}
           </button>
         </div>
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span className="truncate">{session ? `${session.studentName} · ${session.classCode}/${session.studentCode}` : 'Chưa nhập thông tin học sinh'}</span>
-          <span>{savedAt ? `Đã lưu nháp ${new Date(savedAt).toLocaleTimeString('vi-VN')}` : 'Tự lưu mỗi 5 giây'}</span>
-        </div>
-        <div className="flex gap-1" role="tablist">
+        <div className="grid grid-cols-3 gap-1" role="tablist">
           {(
             [
-              ['steps', 'Quy trình', ClipboardCheck],
+              ['steps', 'Thí nghiệm', ClipboardCheck],
               ['data', `Số liệu (${trials.length})`, FileText],
               ['result', 'Kết quả', CheckCircle2]
             ] as const
           ).map(([k, label, Icon]) => (
-            <button key={k} role="tab" aria-selected={tab === k} className={`btn flex-1 px-1 text-xs ${tab === k ? 'border-lab-400 bg-slate-700' : ''}`} onClick={() => setTab(k)}>
+            <button key={k} role="tab" aria-selected={tab === k} className={`btn min-h-[40px] px-1 text-xs ${tab === k ? 'border-lab-400 bg-slate-700' : 'border-transparent'}`} onClick={() => setTab(k)}>
               <Icon size={14} /> {label}
             </button>
           ))}
         </div>
       </div>
 
-      <div key={`${plugin.id}-${tab}`} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2">
+      <div key={`${plugin.id}-${tab}`} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2">
         <ResumeCard />
-        {showPre ? (
-          <QuizPanel phase="pre" questions={plugin.preQuiz} onDone={() => setShowPre(false)} />
+        {quizOpen ? (
+          <QuizPanel phase="pre" questions={plugin.preQuiz} onDone={() => { setQuizOpen(false); setShowPre(false); }} />
         ) : tab === 'steps' ? (
           <>
-            <div>
-              <h2 className="text-sm font-bold leading-snug">{plugin.title}</h2>
-              <p className="text-xs text-slate-400">{plugin.sgkRef}</p>
-              <button className="mt-1 text-xs text-lab-400 underline" onClick={() => setShowTheory(!showTheory)}>
-                {showTheory ? 'Ẩn cơ sở lí thuyết' : 'Xem mục tiêu & cơ sở lí thuyết'}
-              </button>
-              {showTheory && (
-                <div className="mt-1 space-y-1 rounded-lg bg-slate-800/70 p-2 text-xs text-slate-300">
-                  <ul className="list-disc pl-4">
-                    {plugin.objectives.map((o) => (
-                      <li key={o}>{o}</li>
-                    ))}
-                  </ul>
-                  <p>{plugin.theory}</p>
-                  {plugin.equation && <p className="rounded bg-slate-900 p-1 text-center font-mono text-amber-200">{plugin.equation}</p>}
+            {showPre && (
+              <section className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 p-2 text-sm" aria-label="Câu hỏi trước thí nghiệm">
+                <span className="min-w-[150px] flex-1">{plugin.preQuiz.length} câu hỏi nhanh trước khi làm</span>
+                <button className="btn min-h-[40px]" onClick={() => setQuizOpen(true)}>
+                  Trả lời
+                </button>
+                <button className="btn-ghost min-h-[40px]" onClick={() => { st().submitQuiz('pre'); setShowPre(false); }}>
+                  Bỏ qua
+                </button>
+              </section>
+            )}
+
+            {/* Bước hiện tại: một thẻ, một nút chính */}
+            <section className="rounded-xl border-2 border-lab-500 bg-lab-900/40 p-3" aria-label="Bước hiện tại">
+              <div className="flex items-center gap-2 text-xs text-slate-300">
+                <b className="text-lab-400">{currentStep ? `Bước ${stepIdx + 1}/${plugin.steps.length}` : 'Đã xong các bước'}</b>
+                <span className="h-1.5 flex-1 overflow-hidden rounded bg-slate-700" role="progressbar" aria-valuemin={0} aria-valuemax={plugin.steps.length} aria-valuenow={stepIdx} aria-label="Tiến độ">
+                  <span className="block h-full bg-lab-500" style={{ width: `${(stepIdx / Math.max(1, plugin.steps.length)) * 100}%` }} />
+                </span>
+              </div>
+              <h2 className="mt-1 text-base font-bold leading-snug">{currentStep ? currentStep.title : 'Tính và nhập kết quả'}</h2>
+              <p className="mt-0.5 text-sm text-slate-200">{currentStep ? currentStep.instruction : 'Mở phần Kết quả, nhập số em tính được và viết kết luận.'}</p>
+              {missingPpe.length > 0 && <p className="mt-1.5 rounded bg-amber-900/50 p-1.5 text-sm text-amber-100" role="status">⚠ Bật đủ bảo hộ ở thanh phía trên trước khi làm.</p>}
+              {tuning && currentStep?.action === 'adjust' && (
+                <div className="mt-2 space-y-2">
+                  {plugin.tools?.includes('mc964') && <Mc964Console />}
+                  <ParamControls />
                 </div>
               )}
-            </div>
-            <ol className="space-y-1">
-              {plugin.steps.map((s, i) => {
-                const done = completed.includes(s.id);
-                const cur = i === stepIdx;
-                return (
-                  <li key={s.id} className={`flex gap-2 rounded-lg p-1.5 text-sm ${cur ? 'border border-lab-500 bg-lab-900/40' : ''}`}>
-                    {done ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-ok" /> : <Circle size={18} className={`mt-0.5 shrink-0 ${cur ? 'text-lab-400' : 'text-slate-600'}`} />}
-                    <div>
-                      <div className={done ? 'text-slate-400 line-through' : 'font-medium'}>
-                        {i + 1}. {s.title}
-                        {s.requiresPpe && <span className="ml-1 text-xs text-warn">(cần bảo hộ)</span>}
-                      </div>
-                      {cur && <p className="text-xs text-slate-300">{s.instruction}</p>}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-            {currentStep && currentStep.action !== 'measure' && currentStep.action !== 'adjust' && (
-              <button className="btn-primary w-full" onClick={doStep}>
-                <Play size={16} /> Thực hiện bước {stepIdx + 1}: {currentStep.title}
+              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={missingPpe.length > 0 && !submitted}>
+                <PrimaryIcon size={19} /> {primary.label}
               </button>
-            )}
-            {!currentStep && <p className="rounded-lg bg-emerald-900/40 p-2 text-sm text-ok">Đã hoàn thành mọi bước! Chuyển sang tab Kết quả để nộp bài.</p>}
+              {measured && !submitted && (!currentStep || (currentStep.action === 'record' && need === 0)) && (
+                <button className="btn mt-1.5 w-full" onClick={doMeasure}>
+                  <Ruler size={16} /> Đo thêm
+                </button>
+              )}
+            </section>
 
-            {plugin.tools?.includes('mc964') && <Mc964Console />}
-            <PrincipleBox />
-            <div className="space-y-2 rounded-lg border border-slate-700 p-2">
-              <h3 className="text-xs font-bold uppercase text-slate-400">Thông số thí nghiệm</h3>
-              <ParamControls />
-              {currentStep?.action === 'adjust' && (
-                <button className="btn w-full text-xs" onClick={doStep}>
-                  Giữ thông số mặc định và tiếp tục
+            {tuning && currentStep?.action !== 'adjust' && (
+              <section className="space-y-2 rounded-lg border border-slate-700 p-2" aria-label="Thông số">
+                {plugin.tools?.includes('mc964') && <Mc964Console />}
+                <PrincipleBox />
+                <ParamControls />
+              </section>
+            )}
+            <More title="Kiến thức" open={conceptual}>
+              <InsightPanel />
+              <div className="space-y-1 text-sm text-slate-300">
+                <p className="font-semibold text-slate-100">{plugin.title}</p>
+                <p className="text-xs text-slate-400">{plugin.sgkRef}</p>
+                <ul className="list-disc pl-4">
+                  {plugin.objectives.map((o) => (
+                    <li key={o}>{o}</li>
+                  ))}
+                </ul>
+                <p>{plugin.theory}</p>
+                {plugin.equation && <p className="rounded bg-slate-950 p-1 text-center font-mono text-amber-200">{plugin.equation}</p>}
+              </div>
+            </More>
+            {plugin.tools?.includes('oxidation') && (
+              <More title="Tính số oxi hóa">
+                <OxidationTool />
+              </More>
+            )}
+            <More title="Xem tất cả các bước">
+              <ol className="space-y-1">
+                {plugin.steps.map((s, i) => {
+                  const done = completed.includes(s.id);
+                  return (
+                    <li key={s.id} className="flex gap-2 text-sm">
+                      {done ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-ok" /> : <Circle size={17} className={`mt-0.5 shrink-0 ${i === stepIdx ? 'text-lab-400' : 'text-slate-600'}`} />}
+                      <span className={done ? 'text-slate-400' : i === stepIdx ? 'font-semibold' : ''}>
+                        {i + 1}. {s.title}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </More>
+            <More title="Tùy chọn khác">
+              <div className="grid gap-1.5">
+                {!tuning && (
+                  <div className="space-y-2">
+                    <PrincipleBox />
+                    <ParamControls />
+                  </div>
+                )}
+                {plugin.meniscusSkill && (
+                  <button className="btn" onClick={() => st().openModal('meniscus')}>
+                    <Camera size={15} /> Luyện đọc mặt khum
+                  </button>
+                )}
+                <button className="btn" onClick={() => st().resetCamera()}>
+                  <Eye size={15} /> Về góc nhìn ban đầu
                 </button>
-              )}
-            </div>
-            <InsightPanel />
-            {plugin.tools?.includes('oxidation') && <OxidationTool />}
-            <div className="grid grid-cols-2 gap-1.5">
-              <button className="btn-primary col-span-2 py-2 text-base" onClick={doMeasure} disabled={submitted}>
-                <Ruler size={18} /> Đo / ghi số liệu
-              </button>
-              <button className="btn text-xs" onClick={() => st().resetCamera()}>
-                <Eye size={14} /> Về góc nhìn chuẩn
-              </button>
-              <button className="btn text-xs" onClick={doReset}>
-                <RotateCcw size={14} /> Làm lại
-              </button>
-              {plugin.meniscusSkill && (
-                <button className="btn col-span-2 text-xs" onClick={() => st().openModal('meniscus')}>
-                  <Camera size={14} /> Luyện đọc mặt khum (chống sai số thị sai)
+                <button className="btn" onClick={doReset}>
+                  <RotateCcw size={15} /> Làm lại từ đầu
                 </button>
-              )}
-            </div>
+                <p className="text-xs text-slate-400">{savedAt ? `Đã lưu lúc ${new Date(savedAt).toLocaleTimeString('vi-VN')}` : 'Bài tự lưu mỗi 5 giây.'}</p>
+              </div>
+            </More>
           </>
         ) : tab === 'data' ? (
-          <>
-            {trials.length === 0 ? (
-              <p className="text-sm text-slate-400">Chưa có số liệu. Bấm “Đo / ghi số liệu” ở tab Quy trình hoặc chạm vào dụng cụ đo trong cảnh 3D.</p>
-            ) : (
-              <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} />
-            )}
-            {trials.length > 0 && (
-              <button className="btn w-full text-xs" onClick={() => st().openModal('worksheet')}>
-                <Printer size={14} /> In / Xuất phiếu thí nghiệm
+          trials.length === 0 ? (
+            <div className="space-y-2 p-2 text-center text-sm text-slate-300">
+              <p>Chưa có số liệu. Hãy làm thí nghiệm và bấm Đo.</p>
+              <button className="btn-primary min-h-[46px] w-full" onClick={() => setTab('steps')}>
+                Đi tới thí nghiệm
               </button>
-            )}
-            <SummaryPanel />
-            <ChartGrid plugin={plugin} trials={trials} />
-            {trials.length > 0 && (
-              <div className="rounded-lg bg-slate-800/60 p-2 text-xs">
-                <b>Thống kê nhanh (toàn bộ lần đo):</b>
-                {stats.filter((x) => x.n > 0 && !x.m.valueLabels).map(({ m, mean: mu, err, n }) => (
-                  <div key={m.key}>
-                    {m.label}: trung bình = <b className="font-mono">{fmtVi(mu, m.decimals + 1)}</b> {m.unit}; Δ̄ = <span className="font-mono">{fmtVi(err, m.decimals + 1)}</span> (n = {n})
-                  </div>
-                ))}
-                <p className="mt-1 text-slate-400">Cần tối thiểu {plugin.minTrials} lần đo. Lưu ý: hãy tự tính kết quả theo công thức trong lí thuyết.</p>
-              </div>
-            )}
-          </>
+            </div>
+          ) : (
+            <>
+              <p className={`text-sm font-semibold ${need > 0 ? 'text-warn' : 'text-ok'}`}>{need > 0 ? `Đã đo ${trials.length} lần, cần thêm ${need} lần.` : `✓ Đã đo đủ ${trials.length} lần.`}</p>
+              <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} />
+              <SummaryPanel />
+              <ChartGrid plugin={plugin} trials={trials} limit={1} />
+              <More title="Biểu đồ khác">
+                <ChartGrid plugin={plugin} trials={trials} skip={1} empty="Bài này chỉ có một biểu đồ." />
+              </More>
+              <More title="Trung bình và sai số">
+                <div className="space-y-1 text-sm">
+                  {stats
+                    .filter((x) => x.n > 0 && !x.m.valueLabels)
+                    .map(({ m, mean: mu, err, n }) => (
+                      <div key={m.key}>
+                        {m.label}: trung bình <b className="font-mono">{fmtVi(mu, m.decimals + 1)}</b> {m.unit}, sai số <span className="font-mono">{fmtVi(err, m.decimals + 1)}</span> ({n} lần)
+                      </div>
+                    ))}
+                  <p className="text-xs text-slate-400">Tính trên mọi lần đo, kể cả khi thông số khác nhau.</p>
+                </div>
+              </More>
+              <button className="btn min-h-[44px] w-full" onClick={() => st().openModal('worksheet')}>
+                <Printer size={16} /> In hoặc lưu phiếu
+              </button>
+            </>
+          )
         ) : (
           <>
             <div>
-              <label className="label" htmlFor="student-value">
-                {plugin.result.label} ({plugin.result.unit || 'không đơn vị'})
+              <label className="mb-1 block text-sm font-semibold" htmlFor="student-value">
+                {plugin.result.label}
+                {plugin.result.unit ? ` (${plugin.result.unit})` : ''}
               </label>
-              <input id="student-value" className="input font-mono" inputMode="decimal" value={studentValue} onChange={(e) => st().setStudentValue(e.target.value)} placeholder="Nhập kết quả em tính được, ví dụ 9,78" disabled={submitted} />
-              <p className="mt-1 text-xs text-slate-400">💡 {plugin.result.hint}</p>
+              <input id="student-value" className="input min-h-[46px] font-mono text-base" inputMode="decimal" value={studentValue} onChange={(e) => st().setStudentValue(e.target.value)} placeholder="Ví dụ: 9,78" disabled={submitted} />
+              <p className="mt-1 text-sm text-slate-400">💡 {plugin.result.hint}</p>
             </div>
             <div>
-              <label className="label" htmlFor="conclusion">Kết luận</label>
+              <label className="mb-1 block text-sm font-semibold" htmlFor="conclusion">
+                Kết luận của em
+              </label>
               <textarea id="conclusion" className="input min-h-[90px]" value={conclusion} onChange={(e) => st().setConclusion(e.target.value)} placeholder={plugin.conclusionPrompt} disabled={submitted} />
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button className="btn text-xs" onClick={() => st().setToolsOpen(true)}>
-                <Calculator size={14} /> Máy tính & sổ tay
-              </button>
-              <button className="btn text-xs" onClick={() => st().setTutorOpen(true)}>
-                <Bot size={14} /> Hỏi trợ lý AI
-              </button>
-              <button className="btn col-span-2 text-xs" onClick={() => st().openModal('worksheet')}>
-                <Printer size={14} /> In / Xuất phiếu thí nghiệm
-              </button>
-              <button className="btn-primary col-span-2 py-2" onClick={() => st().openModal('report')}>
-                <FileText size={16} /> {submitted ? 'Xem lại phiếu báo cáo' : 'Nộp bài & xem phiếu báo cáo'}
-              </button>
-            </div>
+            <button className="btn-primary min-h-[50px] w-full text-base" onClick={() => st().openModal('report')}>
+              <FileText size={18} /> {submitted ? 'Xem phiếu báo cáo' : 'Nộp bài'}
+            </button>
+            <More title="Công cụ hỗ trợ">
+              <div className="grid gap-1.5">
+                <button className="btn" onClick={() => st().setToolsOpen(true)}>
+                  <Calculator size={15} /> Máy tính và sổ tay
+                </button>
+                <button className="btn" onClick={() => st().setTutorOpen(true)}>
+                  <Bot size={15} /> Hỏi trợ lý AI
+                </button>
+                <button className="btn" onClick={() => st().openModal('worksheet')}>
+                  <Printer size={15} /> In hoặc lưu phiếu
+                </button>
+              </div>
+            </More>
           </>
         )}
       </div>

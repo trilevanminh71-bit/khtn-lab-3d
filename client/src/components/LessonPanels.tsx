@@ -7,7 +7,7 @@
  *  - Mc964Console, OxidationTool: công cụ riêng của bài.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { FlaskConical, History, Lightbulb, RotateCcw, Sigma } from 'lucide-react';
+import { History, Lightbulb, RotateCcw, Sigma } from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
 import { clearDraft, db } from '../offline/db';
 import { fmtVi } from '../services/appServices';
@@ -27,8 +27,8 @@ export function PrincipleBox() {
       <p className="flex gap-1.5">
         <Lightbulb size={14} className="mt-0.5 shrink-0" />
         <span>
-          <b>Nguyên tắc:</b> Thử thay đổi một đại lượng mỗi lần, ghi số liệu và rút ra kết luận.
-          {many && <> Lần đo vừa rồi em đã đổi {changed.length} đại lượng ({changed.join(', ')}) nên khó kết luận ảnh hưởng của từng đại lượng.</>}
+          Thử thay đổi một đại lượng mỗi lần, ghi số liệu và rút ra kết luận.
+          {many && <b> Em vừa đổi {changed.length} đại lượng: {changed.join(', ')}.</b>}
         </span>
       </p>
     </div>
@@ -36,7 +36,7 @@ export function PrincipleBox() {
 }
 
 /* ------------------------------- Nháp dở -------------------------------- */
-export function ResumeCard() {
+export function ResumeCard({ onResume }: { onResume?: () => void }) {
   const plugins = useLabStore((s) => s.plugins);
   const plugin = useLabStore((s) => s.plugin);
   const trials = useLabStore((s) => s.trials.length);
@@ -70,26 +70,32 @@ export function ResumeCard() {
   if (!p) return null;
   const st = useLabStore.getState;
   return (
-    <section className="rounded-lg border border-sky-500/60 bg-sky-950/50 p-2 text-xs" aria-label="Tiếp tục bài đang làm dở">
-      <h3 className="flex items-center gap-1.5 text-sm font-bold text-sky-200">
-        <History size={15} /> Tiếp tục bài đang làm dở
+    <section className="rounded-xl border-2 border-amber-400 bg-amber-950/60 p-3 shadow-lg" aria-label="Tiếp tục bài đang làm dở">
+      <h3 className="flex items-center gap-2 text-base font-bold text-amber-200">
+        <History size={18} /> Tiếp tục bài đang làm dở
       </h3>
-      <p className="mt-0.5 text-slate-300">
-        {p.shortTitle} — {draft.trials.length} lần đo, {draft.completedSteps.length}/{p.steps.length} bước · lưu {new Date(draft.savedAt).toLocaleString('vi-VN')}
+      <p className="mt-0.5 text-sm text-slate-200">
+        <b>{p.shortTitle}</b> · bước {Math.min(draft.completedSteps.length + 1, p.steps.length)}/{p.steps.length} · {draft.trials.length} lần đo
       </p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        <button className="btn-primary min-h-[34px] py-1 text-xs" onClick={() => st().resumeDraft(draft)}>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button
+          className="btn min-h-[46px] flex-1 border-amber-400 bg-amber-400 text-base font-bold text-slate-950 hover:bg-amber-300"
+          onClick={() => {
+            st().resumeDraft(draft);
+            onResume?.();
+          }}
+        >
           Làm tiếp
         </button>
-        <button className="btn min-h-[34px] py-1 text-xs" onClick={() => setHidden(true)}>
+        <button className="btn-ghost min-h-[46px]" onClick={() => setHidden(true)}>
           Để sau
         </button>
         <button
-          className="btn-ghost min-h-[34px] py-1 text-xs"
+          className="btn-ghost min-h-[46px]"
           onClick={() =>
             st().askConfirm({
               title: 'Xóa bản nháp?',
-              message: `Bản nháp bài "${p.shortTitle}" sẽ bị xóa khỏi máy này và không thể hoàn tác.`,
+              message: `Xóa bài làm dở "${p.shortTitle}"? Không lấy lại được.`,
               confirmLabel: 'Xóa nháp',
               onConfirm: () => void clearDraft(draft.pluginId).then(() => setDraft(null)).catch(() => undefined)
             })
@@ -167,7 +173,6 @@ export function InsightPanel() {
   const plugin = useLabStore((s) => s.plugin);
   const params = useLabStore((s) => s.params);
   const hidden = useLabStore((s) => s.hidden);
-  const [open, setOpen] = useState(true);
   const blocks = useMemo<InsightBlock[]>(() => {
     try {
       return getSolver(plugin.solverId).insight?.({ ...useLabStore.getState().solveContext(), plugin, params, hidden }) ?? [];
@@ -178,13 +183,9 @@ export function InsightPanel() {
   if (!blocks.length) return null;
   return (
     <section aria-label="Kiến thức theo thông số đang chọn">
-      <button className="mb-1 flex items-center gap-1 text-xs font-bold text-lab-400" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <FlaskConical size={13} /> Kiến thức theo thông số đang chọn {open ? '▾' : '▸'}
-      </button>
-      {open && (
         <div className="space-y-1.5">
           {blocks.map((b) => (
-            <div key={b.title} className={`rounded-lg border-l-4 bg-slate-800/70 p-2 text-xs ${TONE[b.tone]}`}>
+            <div key={b.title} className={`rounded-lg border-l-4 bg-slate-800/70 p-2 text-sm ${TONE[b.tone]}`}>
               <b>{b.title}</b>
               <ul className="mt-0.5 space-y-0.5 text-slate-300">
                 {b.lines.map((l) => (
@@ -194,7 +195,6 @@ export function InsightPanel() {
             </div>
           ))}
         </div>
-      )}
     </section>
   );
 }
@@ -247,7 +247,6 @@ export function Mc964Console() {
       <p className="mt-1 text-[11px] font-semibold">
         MC964 · {optionLabel(mode, params.mode)} · thang {optionLabel(scale, params.scale)}
       </p>
-      <p className="text-[11px] text-slate-600">Đổi MODE và thang đo ở mục Thông số thí nghiệm bên dưới.</p>
     </section>
   );
 }

@@ -393,6 +393,8 @@ export interface SubmissionRecord {
   events?: Array<{ at: number; type: string; detail: string }>;
   /** Máy chủ từ chối bài này (lí do) — không thử gửi lại */
   serverRejected?: string[];
+  /** Cờ nghi vấn do máy chủ gắn (xem utils/integrityFlags.ts) */
+  flags?: string[];
 }
 
 /** Dữ liệu tối giản mã hóa trong QR (< 180 ký tự) */

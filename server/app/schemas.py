@@ -87,6 +87,14 @@ class SyncResponse(CamelModel):
     flagged: int = 0
 
 
+class RejectedOut(CamelModel):
+    uid: str
+    student_code: str
+    plugin_id: str
+    reasons: list[str]
+    received_at: int
+
+
 class ClassAnalytics(CamelModel):
     class_code: str
     count: int

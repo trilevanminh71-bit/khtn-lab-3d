@@ -17,6 +17,8 @@ import { apiFetch, fmtVi } from '../services/appServices';
 import { downloadText } from '../utils/bugSnapshot';
 import { ModalShell } from './ModalShell';
 import type { SubmissionRecord } from '../types/lab';
+import { flagLabel, FLAG_LABELS } from '../utils/integrityFlags';
+import { IntegrityPanel, type RejectedRow } from './IntegrityPanel';
 
 type Tab = 'overview' | 'misconceptions' | 'growth' | 'khkt' | 'manage';
 
@@ -63,6 +65,9 @@ export default function TeacherPortal() {
   const [cls, setCls] = useState('Tất cả');
   const [pluginFilter, setPluginFilter] = useState('Tất cả');
   const [msg, setMsg] = useState('');
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [rejected, setRejected] = useState<RejectedRow[]>([]);
+  const [eventsUid, setEventsUid] = useState<string | null>(null);
   const st = useLabStore.getState;
 
   const refresh = async (): Promise<void> => {
@@ -77,11 +82,13 @@ export default function TeacherPortal() {
   }, []);
 
   const classes = useMemo(() => ['Tất cả', ...new Set(rows.map((r) => r.classCode))].sort(), [rows]);
-  const filtered = rows.filter((r) => (cls === 'Tất cả' || r.classCode === cls) && (pluginFilter === 'Tất cả' || r.pluginId === pluginFilter));
+  const isFlagged = (r: SubmissionRecord): boolean => (r.flags?.length ?? 0) > 0 || (r.serverRejected?.length ?? 0) > 0;
+  const filtered = rows.filter((r) => (cls === 'Tất cả' || r.classCode === cls) && (pluginFilter === 'Tất cả' || r.pluginId === pluginFilter) && (!onlyFlagged || isFlagged(r)));
+  const flaggedCount = filtered.filter(isFlagged).length;
   const pName = (id: string): string => plugins.find((p) => p.id === id)?.shortTitle ?? id;
 
   const exportCsv = (): void => {
-    const data: Array<Array<string | number>> = [['Lớp', 'Mã HS', 'Họ tên', 'Bài', 'Điểm', 'Trước (đúng/tổng)', 'Sau (đúng/tổng)', 'Hệ số Hake g', 'Sai số (%)', 'Thời gian (phút)', 'Ngộ nhận', 'Khảo sát TB', 'Nguồn', 'Ngày nộp']];
+    const data: Array<Array<string | number>> = [['Lớp', 'Mã HS', 'Họ tên', 'Bài', 'Điểm', 'Trước (đúng/tổng)', 'Sau (đúng/tổng)', 'Hệ số Hake g', 'Sai số (%)', 'Thời gian (phút)', 'Ngộ nhận', 'Khảo sát TB', 'Nguồn', 'Ngày nộp', 'Kiểm tra của máy chủ']];
     for (const r of filtered) {
       data.push([
         r.classCode,
@@ -97,7 +104,8 @@ export default function TeacherPortal() {
         r.misconceptions.map((m) => getMisconception(m)?.title ?? m).join(' | '),
         r.likert.length ? fmtVi(mean(r.likert), 2) : '',
         r.source,
-        new Date(r.createdAt).toLocaleString('vi-VN')
+        new Date(r.createdAt).toLocaleString('vi-VN'),
+        [...(r.serverRejected?.length ? ['Bị từ chối: ' + r.serverRejected.join(' ')] : []), ...(r.flags ?? []).map(flagLabel)].join(' | ')
       ]);
     }
     downloadText(`ket-qua-${cls === 'Tất cả' ? 'tat-ca-lop' : cls}-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(data), 'text/csv');
@@ -110,18 +118,32 @@ export default function TeacherPortal() {
       const targets = cls === 'Tất cả' ? classes.filter((c) => c !== 'Tất cả') : [cls];
       if (targets.length === 0) throw new Error('Chưa có mã lớp — hãy chọn lớp hoặc nhập bài trước.');
       let added = 0;
+      let flagged = 0;
+      const rej: RejectedRow[] = [];
       for (const c of targets) {
         const data = await apiFetch<{ submissions: SubmissionRecord[] }>(`/api/analytics/class/${encodeURIComponent(c)}`);
         for (const r of data.submissions) {
+          const flags = Array.isArray(r.flags) ? r.flags.map(String) : [];
+          if (flags.length) flagged++;
           const exists = await db.submissions.where('uid').equals(r.uid).first();
           if (!exists) {
-            await db.submissions.add({ ...r, id: undefined, source: 'lan', synced: true });
+            await db.submissions.add({ ...r, flags, id: undefined, source: 'lan', synced: true });
             added++;
+          } else {
+            // Cập nhật cờ máy chủ cho bài đã có (ví dụ bài nộp từ chính máy này)
+            await db.submissions.where('uid').equals(r.uid).modify({ flags });
           }
         }
+        try {
+          const list = await apiFetch<RejectedRow[]>(`/api/analytics/class/${encodeURIComponent(c)}/rejected`);
+          rej.push(...list.map((x) => ({ ...x, classCode: c })));
+        } catch {
+          /* máy chủ cũ chưa có API này → bỏ qua */
+        }
       }
+      setRejected(rej);
       await refresh();
-      setMsg(`Đồng bộ LAN xong: thêm ${added} bài mới.`);
+      setMsg(`Đồng bộ LAN xong: thêm ${added} bài mới · ${flagged} bài có cờ nghi vấn · ${rej.length} bài bị máy chủ từ chối.`);
     } catch (e) {
       setMsg(`Không đồng bộ được: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -266,6 +288,9 @@ export default function TeacherPortal() {
           <button className="btn" onClick={() => st().openModal('scanner')}><QrCode size={16} /> Thu bài QR</button>
           <button className="btn" onClick={() => void syncLan()}><RefreshCw size={16} /> Đồng bộ LAN</button>
           <button className="btn" onClick={exportCsv} disabled={filtered.length === 0}><Download size={16} /> Xuất CSV</button>
+          <label className="flex items-center gap-1.5 text-sm" title="Chỉ hiện bài có cờ nghi vấn hoặc bị máy chủ từ chối">
+            <input type="checkbox" className="h-4 w-4" checked={onlyFlagged} onChange={(e) => setOnlyFlagged(e.target.checked)} /> Chỉ bài nghi vấn
+          </label>
         </div>
       )}
 
@@ -273,11 +298,13 @@ export default function TeacherPortal() {
         <div className="overflow-x-auto">
           <p className="mb-1 text-xs text-slate-400">
             {filtered.length} bài · điểm TB {fmtVi(mean(filtered.map((r) => r.score)), 1)} · sai số TB {fmtVi(mean(filtered.map((r) => r.relErrorPercent)), 1)}%
+            {flaggedCount > 0 && <span className="text-warn"> · ⚠ {flaggedCount} bài nghi vấn</span>}
           </p>
+          <IntegrityPanel rejected={rejected.filter((x) => (cls === 'Tất cả' || x.classCode === cls) && (pluginFilter === 'Tất cả' || x.pluginId === pluginFilter))} pName={pName} eventsUid={eventsUid} onCloseEvents={() => setEventsUid(null)} />
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-700 text-left text-slate-400">
-                <th className="p-1">Lớp</th><th className="p-1">Mã HS</th><th className="p-1">Họ tên</th><th className="p-1">Bài</th><th className="p-1">Điểm</th><th className="p-1">Trước→Sau</th><th className="p-1">Sai số</th><th className="p-1">Nguồn</th><th className="p-1">Ngày</th>
+                <th className="p-1">Lớp</th><th className="p-1">Mã HS</th><th className="p-1">Họ tên</th><th className="p-1">Bài</th><th className="p-1">Điểm</th><th className="p-1">Trước→Sau</th><th className="p-1">Sai số</th><th className="p-1">Nguồn</th><th className="p-1">Ngày</th><th className="p-1">Kiểm tra</th>
               </tr>
             </thead>
             <tbody>
@@ -292,6 +319,20 @@ export default function TeacherPortal() {
                   <td className="p-1">{fmtVi(r.relErrorPercent, 1)}%</td>
                   <td className="p-1">{{ local: 'Máy này', qr: 'QR', lan: 'LAN', seed: 'Mẫu' }[r.source]}</td>
                   <td className="p-1">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</td>
+                  <td className="p-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      {r.serverRejected?.length ? <span className="chip bg-red-900/60 text-red-200" title={r.serverRejected.join(' ')}>Bị từ chối</span> : null}
+                      {(r.flags ?? []).map((f) => (
+                        <span key={f} className="chip bg-amber-900/60 text-amber-200" title={FLAG_LABELS[f]?.hint ?? f}>{flagLabel(f)}</span>
+                      ))}
+                      {!isFlagged(r) && r.synced && <span className="text-ok">✓</span>}
+                      {r.synced && (
+                        <button className="text-lab-400 underline" onClick={() => setEventsUid(r.uid)} title="Xem các thao tác học sinh đã làm">
+                          Nhật kí
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

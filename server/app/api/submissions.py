@@ -1,6 +1,7 @@
 """
 api/submissions.py — Thu bài & phân tích:
 - POST /api/submissions/sync             : nhận lô bài nộp (bỏ qua trùng uid; TỪ CHỐI bài rỗng/bất thường; gắn cờ nghi vấn)
+- GET  /api/analytics/class/{class_code}/rejected : bài bị máy chủ từ chối (rỗng / bất thường) của lớp
 - GET  /api/submissions/{uid}/events     : nhật kí thao tác của một bài nộp (cần ADMIN_TOKEN nếu đã đặt)
 - GET  /api/analytics/class/{class_code} : thống kê lớp (điểm TB, hệ số Hake g TB, ngộ nhận) + danh sách bài
 - GET  /api/backup                       : tải toàn bộ bài nộp (cần ADMIN_TOKEN nếu đã đặt)
@@ -17,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_session
 from ..integrity import check_submission
 from ..models import RejectedSubmission, Submission, SubmissionEvent
-from ..schemas import BackupIn, BackupStored, ClassAnalytics, RejectedItem, SubmissionIn, SubmissionOut, SyncRequest, SyncResponse
+from ..schemas import BackupIn, BackupStored, ClassAnalytics, RejectedItem, RejectedOut, SubmissionIn, SubmissionOut, SyncRequest, SyncResponse
 from .assignments import require_admin
 from .auth import ensure_classroom, sanitize_code
 
@@ -158,6 +159,27 @@ async def class_analytics(class_code: str, session: AsyncSession = Depends(get_s
         misconceptions=dict(mis.most_common()),
         submissions=[to_out(r) for r in rows],
     )
+
+
+@router.get("/analytics/class/{class_code}/rejected", response_model=list[RejectedOut])
+async def class_rejected(class_code: str, session: AsyncSession = Depends(get_session)) -> list[RejectedOut]:
+    """Danh sách bài bị từ chối của lớp (mới nhất trước, tối đa 500) để giáo viên biết học sinh nào nộp bài rỗng."""
+    code = sanitize_code(class_code)
+    rows = (
+        await session.execute(
+            select(RejectedSubmission).where(RejectedSubmission.class_code == code).order_by(RejectedSubmission.received_at.desc()).limit(500)
+        )
+    ).scalars().all()
+    return [
+        RejectedOut(
+            uid=r.uid,
+            student_code=r.student_code,
+            plugin_id=r.plugin_id,
+            reasons=list(r.reasons or []),
+            received_at=int(r.received_at.timestamp() * 1000) if r.received_at else 0,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/backup")

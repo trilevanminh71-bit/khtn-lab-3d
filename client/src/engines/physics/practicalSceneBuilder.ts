@@ -24,13 +24,18 @@ class Trail {
   readonly line: THREE.Line;
   private pts: Float32Array;
   private n = 0;
-  constructor(max = 160, color = '#fbbf24') {
+  /** dashed: nét chấm mảnh, mờ — không đè lên thước đo */
+  constructor(max = 160, color = '#fbbf24', dashed = false) {
     this.pts = new Float32Array(max * 3);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pts, 3));
     g.setDrawRange(0, 0);
-    this.line = new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 }));
+    const m = dashed
+      ? new THREE.LineDashedMaterial({ color, transparent: true, opacity: 0.55, dashSize: 0.025, gapSize: 0.03, depthWrite: false })
+      : new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
+    this.line = new THREE.Line(g, m);
     this.line.frustumCulled = false;
+    this.line.userData.isTrail = true;
   }
   clear(): void {
     this.n = 0;
@@ -43,6 +48,7 @@ class Trail {
     const attr = this.line.geometry.getAttribute('position') as THREE.BufferAttribute;
     attr.needsUpdate = true;
     this.line.geometry.setDrawRange(0, this.n);
+    if (this.line.material instanceof THREE.LineDashedMaterial) this.line.computeLineDistances();
   }
 }
 
@@ -170,8 +176,10 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
   let shown = '0.000';
   let modeText = '';
   let ballD = 2;
-  const trail = new Trail();
+  // Vệt chỉ vẽ trong đoạn E → F (đoạn được đo), nét chấm mờ ngay trên rãnh máng
+  const trail = new Trail(160, '#fcd34d', true);
   incline.add(trail.line);
+  const trailPt = new THREE.Vector3();
   const xOf = (cm: number): number => -len + (len * cm) / 100;
   const place = (cm: number): void => {
     ball.position.set(xOf(cm), 0.09, 0);
@@ -225,7 +233,9 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
         const q = anim.tick(dt);
         const cm = q * q * 100;
         place(cm);
-        trail.push(ball.position);
+        const lo = Math.min(xE, xF);
+        const hi = Math.max(xE, xF);
+        if (cm >= lo && cm <= hi + 1) trail.push(trailPt.set(xOf(Math.min(cm, hi)), 0.045, 0));
         // Đồng hồ chạy số theo thời gian thực của hoạt cảnh (q tỉ lệ với thời gian: x = 100·q²)
         const final = Number(shown);
         const r = ballD / 2;

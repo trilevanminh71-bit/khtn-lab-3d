@@ -33,6 +33,8 @@ export interface EngineOptions {
   highContrast: boolean;
   /** Giao diện sáng: nền cảnh 3D màu nhạt */
   light?: boolean;
+  /** Hiện vệt chuyển động (đối tượng có userData.isTrail) */
+  showTrail?: boolean;
 }
 
 interface View {
@@ -158,6 +160,7 @@ export class ThreeEngineCore {
     sun.shadow.camera.bottom = -3;
     scene.add(sun);
     scene.add(handle.root);
+    this.applyTrail(handle.root);
     return { scene, handle, lights: sun };
   }
 
@@ -273,8 +276,17 @@ export class ThreeEngineCore {
     this.resize();
   }
 
+  /** Ẩn/hiện mọi vệt chuyển động trong một cây đối tượng */
+  private applyTrail(root: THREE.Object3D): void {
+    const on = this.opts.showTrail !== false;
+    root.traverse((o) => {
+      if (o.userData.isTrail) o.visible = on;
+    });
+  }
+
   setOptions(opts: Partial<EngineOptions>): void {
     this.opts = { ...this.opts, ...opts };
+    for (const v of [this.main, this.compare]) if (v) this.applyTrail(v.handle.root);
     this.renderer.setClearColor(this.bg());
     for (const v of [this.main, this.compare]) {
       if (!v) continue;

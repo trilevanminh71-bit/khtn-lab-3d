@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pinHash: APP_CONFIG.defaultPinHash,
   remoteUpdateUrl: APP_CONFIG.remoteUpdateUrl,
   showOnboarding: true,
+  showTrail: true,
   theme: 'dark'
 };
 

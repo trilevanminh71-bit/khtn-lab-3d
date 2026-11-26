@@ -397,6 +397,8 @@ export interface AppSettings {
   pinHash: string;
   remoteUpdateUrl: string;
   showOnboarding: boolean;
+  /** Hiện vệt chuyển động (quỹ đạo) của vật trong cảnh 3D */
+  showTrail: boolean;
   /** Giao diện sáng / tối / theo hệ thống */
   theme: 'dark' | 'light' | 'system';
 }

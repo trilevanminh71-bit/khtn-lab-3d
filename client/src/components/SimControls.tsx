@@ -20,6 +20,7 @@ export function SimControls() {
   const plugin = useLabStore((s) => s.plugin);
   const completed = useLabStore((s) => s.completedSteps);
   const [more, setMore] = useState(false);
+  const showTrail = useLabStore((s) => s.settings.showTrail !== false);
   const st = useLabStore.getState;
   const current = plugin.steps.findIndex((s) => !completed.includes(s.id));
   const steps = plugin.steps.map((s, i) => ({ s, i })).filter((x) => x.s.trigger);
@@ -31,6 +32,10 @@ export function SimControls() {
     <div className="no-print absolute bottom-2 left-2 z-10 flex max-w-[calc(100%-4.5rem)] flex-col items-start gap-1.5" data-tour="sim">
       {more && (
         <div className="panel space-y-1.5 p-2">
+          <label className="flex min-h-[36px] cursor-pointer items-center gap-2 px-1 text-xs text-slate-200">
+            <input type="checkbox" className="h-4 w-4" checked={showTrail} onChange={(e) => st().updateSettings({ showTrail: e.target.checked })} />
+            Hiện vệt chuyển động
+          </label>
           <button className={`${BTN} w-full`} onClick={() => st().simStep()}>
             <StepForward size={14} /> Từng bước
           </button>

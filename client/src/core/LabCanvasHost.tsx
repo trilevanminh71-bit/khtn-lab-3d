@@ -74,7 +74,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
           onContextLost();
         }
       },
-      { quality: st.qualityLevel, autoAdaptive: st.settings.autoAdaptiveFps, minFps: APP_CONFIG.minFps, highContrast: st.settings.highContrast, light: document.documentElement.classList.contains('theme-light') }
+      { quality: st.qualityLevel, autoAdaptive: st.settings.autoAdaptiveFps, minFps: APP_CONFIG.minFps, highContrast: st.settings.highContrast, light: document.documentElement.classList.contains('theme-light'), showTrail: st.settings.showTrail }
     );
     engineRef.current = engine;
     // Chế độ phát triển: cho phép kiểm tra engine từ DevTools
@@ -137,8 +137,8 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   }, [quality]);
 
   useEffect(() => {
-    engineRef.current?.setOptions({ autoAdaptive: settings.autoAdaptiveFps, highContrast: settings.highContrast, light });
-  }, [settings.autoAdaptiveFps, settings.highContrast, light]);
+    engineRef.current?.setOptions({ autoAdaptive: settings.autoAdaptiveFps, highContrast: settings.highContrast, light, showTrail: settings.showTrail });
+  }, [settings.autoAdaptiveFps, settings.highContrast, light, settings.showTrail]);
 
   useEffect(() => {
     engineRef.current?.setDebug(debug);

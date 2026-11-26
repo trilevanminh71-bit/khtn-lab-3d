@@ -69,7 +69,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: '',
   pinHash: APP_CONFIG.defaultPinHash,
   remoteUpdateUrl: APP_CONFIG.remoteUpdateUrl,
-  showOnboarding: true
+  showOnboarding: true,
+  theme: 'dark'
 };
 
 /** Tên môn học hiển thị */

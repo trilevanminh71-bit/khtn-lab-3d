@@ -10,7 +10,7 @@ export const forceCompositionPlugin: LabPluginDef = {
   version: 1,
   subject: 'physics',
   title: 'Thực hành: Tổng hợp lực',
-  shortTitle: 'Bài 22 – Tổng hợp lực',
+  shortTitle: 'Bài 22 – Thực hành: Tổng hợp lực',
   sgkRef: 'Vật lí 10 – Bài 22: Thực hành: Tổng hợp lực',
   chapter: 'Chương III. Động lực học',
   grade: 10,
@@ -47,7 +47,7 @@ export const forceCompositionPlugin: LabPluginDef = {
   ],
   charts: [
     { id: 'f-alpha', title: 'Hợp lực theo góc α', kind: 'scatter', x: 'alpha', y: 'Ftn', xLabel: 'α (°)', yLabel: 'F (N)', showIf: { key: 'mode', in: [0] } },
-    { id: 'ratio', title: 'd₁/d₂ theo F₂/F₁', kind: 'scatter', x: 'rf', y: 'rd', xLabel: 'F₂/F₁', yLabel: 'd₁/d₂', showIf: { key: 'mode', in: [1] } },
+    { id: 'ratio', title: 'd₁/d₂ theo F₂/F₁', kind: 'scatter', fit: 'linear', x: 'rf', y: 'rd', xLabel: 'F₂/F₁', yLabel: 'd₁/d₂', showIf: { key: 'mode', in: [1] } },
     { id: 'delta', title: 'Sai lệch δ theo lần đo', kind: 'bar', x: 'index', y: 'delta', xLabel: 'Lần đo', yLabel: 'δ (%)', refLine: { value: 5, label: 'mốc 5%' } }
   ],
   minTrials: 4,

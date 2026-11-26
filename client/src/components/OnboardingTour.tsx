@@ -1,5 +1,5 @@
 /**
- * components/OnboardingTour.tsx — Tour hướng dẫn tương tác 5 bước khi mở web lần đầu.
+ * components/OnboardingTour.tsx — Tour hướng dẫn 4 bước khi mở web lần đầu (bỏ qua được; xem lại trong Trợ giúp hoặc Cài đặt).
  * Mỗi bước làm nổi bật một vùng giao diện (thuộc tính data-tour) và giải thích cách dùng.
  */
 import { useEffect, useState } from 'react';
@@ -8,9 +8,8 @@ import { useLabStore } from '../store/useLabStore';
 const STEPS = [
   { target: 'subjects', title: '1. Chọn môn học', text: 'Bấm Vật lí, Hóa học hoặc Sinh học để xem danh sách bài và chọn bài.' },
   { target: 'canvas', title: '2. Không gian 3D', text: 'Kéo để xoay, chụm 2 ngón để phóng to. Dụng cụ phát sáng là dụng cụ cần chạm.' },
-  { target: 'ppe', title: '3. An toàn trước tiên', text: 'Bài có hóa chất sẽ hiện thanh bảo hộ: đeo kính, đeo găng, đọc nhãn trước khi làm.' },
-  { target: 'hud', title: '4. Bảng thí nghiệm', text: 'Mỗi bước có một nút chính màu xanh. Cứ làm lần lượt, bài tự lưu.' },
-  { target: 'teacher', title: '5. Menu', text: 'Cài đặt, so sánh thí nghiệm và Cổng giáo viên nằm trong Menu. Làm xong, mở phần Kết quả để nộp bài.' }
+  { target: 'hud', title: '3. Bảng thí nghiệm', text: 'Nhập tên và lớp trước. Mỗi bước có một nút chính màu xanh; bài có hóa chất cần bật bảo hộ ở thanh phía trên. Bài tự lưu.' },
+  { target: 'teacher', title: '4. Menu', text: 'Cài đặt, so sánh thí nghiệm và Cổng giáo viên nằm trong Menu. Làm xong, mở phần Kết quả để nộp bài.' }
 ];
 
 export function OnboardingTour() {

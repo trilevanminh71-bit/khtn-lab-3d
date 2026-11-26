@@ -10,7 +10,7 @@ export const momentumCollisionPlugin: LabPluginDef = {
   version: 1,
   subject: 'physics',
   title: 'Thực hành: Xác định động lượng của vật trước và sau va chạm',
-  shortTitle: 'Bài 30 – Động lượng, va chạm',
+  shortTitle: 'Bài 30 – Thực hành: Xác định động lượng của vật trước và sau va chạm',
   sgkRef: 'Vật lí 10 – Bài 30: Thực hành: Xác định động lượng của vật trước và sau va chạm',
   chapter: 'Chương V. Động lượng',
   grade: 10,
@@ -53,7 +53,7 @@ export const momentumCollisionPlugin: LabPluginDef = {
     { key: 'delta', label: 'Sai lệch δ', unit: '%', decimals: 2 }
   ],
   charts: [
-    { id: 'pb-pa', title: 'Động lượng sau theo động lượng trước', kind: 'scatter', x: 'pb', y: 'pa', xLabel: 'p trước (kg·m/s)', yLabel: 'p sau (kg·m/s)', groupBy: 'type' },
+    { id: 'pb-pa', title: 'Động lượng sau theo động lượng trước', kind: 'scatter', fit: 'linear', x: 'pb', y: 'pa', xLabel: 'p trước (kg·m/s)', yLabel: 'p sau (kg·m/s)', groupBy: 'type' },
     { id: 'delta', title: 'Sai lệch δ theo lần đo', kind: 'bar', x: 'index', y: 'delta', xLabel: 'Lần đo', yLabel: 'δ (%)', refLine: { value: 5, label: 'ngưỡng 5%' } }
   ],
   minTrials: 4,

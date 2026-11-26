@@ -66,6 +66,14 @@ export default function SettingsModal() {
           <h3 className="label">Đồ họa</h3>
           <Toggle label="Đồ họa máy yếu" hint="Giảm độ phân giải, tắt bóng đổ — cho máy tính cũ / điện thoại giá rẻ." checked={settings.lowEndGraphics} onChange={(v) => update({ lowEndGraphics: v })} />
           <Toggle label="Tự thích ứng FPS" hint="Tự hạ chất lượng khi FPS dưới 28 và tăng lại khi máy rảnh." checked={settings.autoAdaptiveFps} onChange={(v) => update({ autoAdaptiveFps: v })} />
+          <h3 className="label mt-3">Giao diện</h3>
+          <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Giao diện sáng tối">
+            {([['light', 'Sáng'], ['dark', 'Tối'], ['system', 'Theo máy']] as const).map(([k, label]) => (
+              <button key={k} role="radio" aria-checked={settings.theme === k} className={`btn text-xs ${settings.theme === k ? 'border-lab-400 bg-lab-700 text-white' : ''}`} onClick={() => update({ theme: k })}>
+                {label}
+              </button>
+            ))}
+          </div>
           <h3 className="label mt-3">Trợ năng</h3>
           <label className="block text-sm">
             Cỡ chữ: <b>{Math.round(settings.fontScale * 100)}%</b>

@@ -168,7 +168,7 @@ export const rateFactorsPlugin: LabPluginDef = {
   derived: [{ key: 'v', label: 'Tốc độ v̄', unit: 'mmol/(L·s)', decimals: 4, expr: 'dC / dt' }],
   charts: [
     { id: 'v-T', title: 'Tốc độ theo nhiệt độ', kind: 'scatter', x: 'T', y: 'v', xLabel: 'T (°C)', yLabel: 'v̄ (mmol/(L·s))', groupBy: 'system' },
-    { id: 'v-C', title: 'Tốc độ theo nồng độ', kind: 'scatter', x: 'C', y: 'v', xLabel: 'C (mol/L)', yLabel: 'v̄ (mmol/(L·s))', groupBy: 'system', showIf: { key: 'system', in: [0, 1] } },
+    { id: 'v-C', title: 'Tốc độ theo nồng độ', kind: 'scatter', fit: 'linear', x: 'C', y: 'v', xLabel: 'C (mol/L)', yLabel: 'v̄ (mmol/(L·s))', groupBy: 'system', showIf: { key: 'system', in: [0, 1] } },
     { id: 'v-P', title: 'Tốc độ theo áp suất', kind: 'scatter', x: 'P', y: 'v', xLabel: 'p (bar)', yLabel: 'v̄ (mmol/(L·s))', showIf: { key: 'system', in: [2] } },
     { id: 'v-area', title: 'Tốc độ theo kích thước hạt', kind: 'bar', x: 'area', y: 'v', xLabel: 'Hạt CaCO₃', yLabel: 'v̄', showIf: { key: 'system', in: [0] } },
     { id: 'v-cat', title: 'Tốc độ theo chất xúc tác', kind: 'bar', x: 'cat', y: 'v', xLabel: 'Xúc tác', yLabel: 'v̄', showIf: { key: 'system', in: [1] } }

@@ -121,6 +121,10 @@ export interface LabState {
   startedAt: number;
   meniscusErrorMl: number | null;
   submitted: boolean;
+  /** Lần đo vừa thực hiện, chờ học sinh bấm "Ghi vào bảng" */
+  pendingTrial: TrialRecord | null;
+  /** Số lần đã đo (kể cả lần chưa ghi) — dùng làm mầm nhiễu đo */
+  measureSeq: number;
 
   settings: AppSettings;
   splitScreen: boolean;
@@ -161,6 +165,11 @@ export interface LabState {
   performCurrentStep(): ActionResult;
   takeMeasurement(): ActionResult;
   deleteTrial(index: number): void;
+  commitPending(): ActionResult;
+  discardPending(): void;
+  addManualTrial(values: Record<string, number>): void;
+  /** Đo và ghi liên tiếp n lần (chế độ đo lặp tự động) */
+  autoMeasure(n: number): ActionResult;
   resetLab(): void;
   jumpToStep(index: number): void;
   setNotes(t: string): void;
@@ -248,6 +257,8 @@ function freshLabState(plugin: LabPluginDef, session: StudentSession | null) {
     startedAt: Date.now(),
     meniscusErrorMl: null as number | null,
     submitted: false,
+    pendingTrial: null as TrialRecord | null,
+    measureSeq: 0,
     simPaused: false,
     lastMeasureVisual: null as SceneVisualState | null
   };
@@ -411,7 +422,7 @@ export const useLabStore = create<LabState>((set, get) => ({
       return { ok: false, message: `Trước khi đo, hãy làm: ${st.plugin.steps[cur].title}.` };
     }
     const solver = getSolver(st.plugin.solverId);
-    const rngSeed = (st.seed ^ Math.imul(st.trials.length + 1, 2654435761) ^ hashString(JSON.stringify(st.params))) >>> 0;
+    const rngSeed = (st.seed ^ Math.imul(st.measureSeq + 1, 2654435761) ^ hashString(JSON.stringify(st.params))) >>> 0;
     const ctx = st.solveContext(rngSeed);
     const incidents = solver.incidents(ctx);
     const newOnes = incidents.filter((i) => !st.activeIncidents.includes(i));
@@ -445,14 +456,40 @@ export const useLabStore = create<LabState>((set, get) => ({
     soundEngine.play(st.plugin.subject === 'chemistry' ? 'bubble' : 'tick');
     vibrate('tap');
     logAction('measure', JSON.stringify(result.values));
-    set({ trials: [...st.trials, trial], visual: result.visual, visualNonce: st.visualNonce + 1, completedSteps: completed, simPaused: false, lastMeasureVisual: result.visual });
+    set({ pendingTrial: trial, measureSeq: st.measureSeq + 1, visual: result.visual, visualNonce: st.visualNonce + 1, completedSteps: completed, simPaused: false, lastMeasureVisual: result.visual });
     const describe = Object.entries(result.values)
       .map(([k, v]) => {
         const m = st.plugin.measurements.find((x) => x.key === k);
         return `${m?.label ?? k}: ${m?.valueLabels?.[String(v)] ?? `${String(v).replace('.', ',')}${m?.unit ? ` ${m.unit}` : ''}`}`;
       })
       .join('; ');
-    return { ok: true, message: Object.keys(result.values).length > 2 ? `Đã ghi lần đo ${trial.index}.` : `Lần đo ${trial.index}: ${describe}` };
+    return { ok: true, message: Object.keys(result.values).length > 2 ? 'Đã đo xong. Bấm "Ghi vào bảng".' : `${describe}. Bấm "Ghi vào bảng".` };
+  },
+  commitPending() {
+    const st = get();
+    if (!st.pendingTrial) return { ok: false, message: 'Chưa có lần đo nào để ghi.' };
+    const trial = { ...st.pendingTrial, index: st.trials.length + 1 };
+    logAction('commit-trial', String(trial.index));
+    set({ trials: [...st.trials, trial], pendingTrial: null });
+    return { ok: true, message: `✓ Đã ghi lần ${trial.index} vào bảng.` };
+  },
+  discardPending: () => set({ pendingTrial: null }),
+  addManualTrial(values) {
+    const st = get();
+    const trial: TrialRecord = { index: st.trials.length + 1, params: { ...st.params }, values, at: Date.now(), manual: true };
+    logAction('manual-trial', JSON.stringify(values));
+    set({ trials: [...st.trials, trial] });
+    st.toast('success', `✓ Đã thêm hàng ${trial.index} (nhập tay).`);
+  },
+  autoMeasure(n) {
+    let done = 0;
+    for (let i = 0; i < n; i++) {
+      const r = get().takeMeasurement();
+      if (!r.ok) return done ? { ok: true, message: `Đã đo và ghi ${done} lần. ${r.message}` } : r;
+      get().commitPending();
+      done++;
+    }
+    return { ok: true, message: `✓ Đã đo và ghi ${done} lần.` };
   },
   deleteTrial(index) {
     const trials = get()

@@ -39,7 +39,7 @@ export const thiosulfateRatePlugin: LabPluginDef = {
     { key: 't', label: 'Thời gian mất dấu X', unit: 's', decimals: 1 },
     { key: 'v', label: 'Tốc độ tương đối 1/t', unit: '1/s', decimals: 4 }
   ],
-  charts: [{ id: 't-T', title: 'Thời gian mất dấu X theo nhiệt độ', kind: 'scatter', x: 'T', y: 't', xLabel: 'T (°C)', yLabel: 't (s)' }, { id: 'v-C', title: 'Tốc độ 1/t theo nồng độ', kind: 'scatter', x: 'C', y: 'v', xLabel: 'C (mol/L)', yLabel: '1/t (1/s)' }],
+  charts: [{ id: 't-T', title: 'Thời gian mất dấu X theo nhiệt độ', kind: 'scatter', x: 'T', y: 't', xLabel: 'T (°C)', yLabel: 't (s)' }, { id: 'v-C', title: 'Tốc độ 1/t theo nồng độ', kind: 'scatter', fit: 'linear', x: 'C', y: 'v', xLabel: 'C (mol/L)', yLabel: '1/t (1/s)' }],
   minTrials: 4,
   result: { key: 'gamma', label: "Hệ số nhiệt độ Van't Hoff γ", unit: '', tolerancePercent: 8, decimals: 2, hint: 'Giữ nguyên C, đo t ở hai nhiệt độ T₁ < T₂: γ = (t₁/t₂)^(10/(T₂−T₁)).' },
   steps: [

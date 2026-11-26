@@ -3,7 +3,7 @@
  * Luôn hiện: Chạy/Dừng và Đặt lại. Mục "Thêm": Từng bước và góc nhìn chuẩn (toàn cảnh, chính diện, từ trên, bên cạnh, theo bước).
  */
 import { useState } from 'react';
-import { MoreHorizontal, Pause, Play, RotateCcw, StepForward } from 'lucide-react';
+import { Focus, MoreHorizontal, Pause, Play, RotateCcw, StepForward } from 'lucide-react';
 import { useLabStore, type CameraViewKind } from '../store/useLabStore';
 
 const VIEWS: Array<[CameraViewKind, string]> = [
@@ -72,10 +72,13 @@ export function SimControls() {
             <Play size={14} /> {paused ? 'Chạy tiếp' : 'Chạy lại'}
           </button>
         )}
-        <button className={BTN} onClick={() => st().simReset()} title="Đưa dụng cụ về ban đầu, giữ số liệu đã ghi">
+        <button className={BTN} onClick={() => st().simReset()} title="Đưa dụng cụ và đồng hồ về ban đầu, giữ số liệu đã ghi">
           <RotateCcw size={14} /> Đặt lại
         </button>
-        <button className={`${BTN} ${more ? 'border-lab-400' : ''}`} onClick={() => setMore(!more)} aria-expanded={more} aria-label="Thêm điều khiển">
+        <button className={BTN} onClick={() => st().resetCamera()} aria-label="Về góc nhìn ban đầu" title="Về góc nhìn ban đầu">
+          <Focus size={15} />
+        </button>
+        <button className={`${BTN} ${more ? 'border-lab-400' : ''}`} title="Từng bước, chọn góc nhìn" onClick={() => setMore(!more)} aria-expanded={more} aria-label="Thêm điều khiển">
           <MoreHorizontal size={16} />
         </button>
       </div>

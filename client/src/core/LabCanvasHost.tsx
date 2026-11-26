@@ -14,6 +14,7 @@ import { getSolver } from '../engines/solverRegistry';
 import { generateHiddenParams, mulberry32, sessionSeed } from '../utils/randomizer';
 import { APP_CONFIG } from '../config/appConfig';
 import { logAction } from '../utils/bugSnapshot';
+import { useIsLight } from '../utils/theme';
 import type { LabPluginDef } from '../types/lab';
 
 export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) {
@@ -33,6 +34,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   const completed = useLabStore((s) => s.completedSteps);
   const settings = useLabStore((s) => s.settings);
   const plugins = useLabStore((s) => s.plugins);
+  const light = useIsLight();
   const sceneNonce = useLabStore((s) => s.sceneNonce);
   const paused = useLabStore((s) => s.simPaused);
   const stepNonce = useLabStore((s) => s.simStepNonce);
@@ -72,7 +74,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
           onContextLost();
         }
       },
-      { quality: st.qualityLevel, autoAdaptive: st.settings.autoAdaptiveFps, minFps: APP_CONFIG.minFps, highContrast: st.settings.highContrast }
+      { quality: st.qualityLevel, autoAdaptive: st.settings.autoAdaptiveFps, minFps: APP_CONFIG.minFps, highContrast: st.settings.highContrast, light: document.documentElement.classList.contains('theme-light') }
     );
     engineRef.current = engine;
     // Chế độ phát triển: cho phép kiểm tra engine từ DevTools
@@ -135,8 +137,8 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   }, [quality]);
 
   useEffect(() => {
-    engineRef.current?.setOptions({ autoAdaptive: settings.autoAdaptiveFps, highContrast: settings.highContrast });
-  }, [settings.autoAdaptiveFps, settings.highContrast]);
+    engineRef.current?.setOptions({ autoAdaptive: settings.autoAdaptiveFps, highContrast: settings.highContrast, light });
+  }, [settings.autoAdaptiveFps, settings.highContrast, light]);
 
   useEffect(() => {
     engineRef.current?.setDebug(debug);

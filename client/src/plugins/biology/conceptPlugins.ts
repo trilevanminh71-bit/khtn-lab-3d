@@ -98,7 +98,7 @@ export const membraneTransportPlugin: LabPluginDef = {
     { key: 'dV', label: 'Biến thiên thể tích ΔV', unit: '%', decimals: 1, showIf: { key: 'process', in: [2] } }
   ],
   charts: [
-    { id: 'dv-c', title: 'Biến thiên thể tích theo nồng độ ngoài', kind: 'scatter', x: 'Cout', y: 'dV', xLabel: 'C ngoài (mol/L)', yLabel: 'ΔV (%)', groupBy: 'cell', refLine: { value: 0, label: 'đẳng trương' }, showIf: { key: 'process', in: [2] } },
+    { id: 'dv-c', title: 'Biến thiên thể tích theo nồng độ ngoài', kind: 'scatter', fit: 'linear', x: 'Cout', y: 'dV', xLabel: 'C ngoài (mol/L)', yLabel: 'ΔV (%)', groupBy: 'cell', refLine: { value: 0, label: 'đẳng trương' }, showIf: { key: 'process', in: [2] } },
     { id: 'rate-c', title: 'Tốc độ vận chuyển theo nồng độ ngoài', kind: 'scatter', x: 'Cout', y: 'rate', xLabel: 'C ngoài (mol/L)', yLabel: 'v (đv)', groupBy: 'process', showIf: { key: 'process', in: [0, 1, 3] } }
   ],
   minTrials: 5,

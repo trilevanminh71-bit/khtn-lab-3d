@@ -104,6 +104,7 @@ export default function AiTutorDrawer() {
         ? 'Dịch vụ AI đang quá tải (hết hạn mức tạm thời). Em thử lại sau khoảng 1 phút.'
         : null;
   const blocked = blockReason !== null;
+  const left = APP_CONFIG.aiDailyQuota - quota;
   const SR = getSR();
   const canVoice = !blocked && SR !== null;
   const localHints = OFFLINE_TUTOR_KB.filter((e) => e.pluginIds.includes(plugin.id));
@@ -160,7 +161,13 @@ export default function AiTutorDrawer() {
     const key = `${plugin.id}:${hashString(normalizeVi(q.trim()))}`;
     const cached = await getAiCache(key).catch(() => undefined);
     if (cached) return { role: 'tutor', text: cached, source: 'cache', at: Date.now() };
-    const context = `Bài: ${plugin.title} (${SUBJECT_LABELS[plugin.subject]}). Đại lượng cần tìm: ${plugin.result.label}. Học sinh đã đo ${trials.length} lần.`;
+    // Ngữ cảnh: bước đang làm, thông số đang chọn, lần đo gần nhất, kết quả em nhập (không gửi đáp án thật)
+    const s = useLabStore.getState();
+    const step = s.plugin.steps[s.currentStepIndex()];
+    const paramText = s.plugin.params.map((d) => `${d.label} = ${d.options?.find((o) => o.value === s.params[d.key])?.label ?? s.params[d.key]}${d.unit ? ` ${d.unit}` : ''}`).join('; ');
+    const last = s.trials[s.trials.length - 1];
+    const lastText = last ? Object.entries(last.values).map(([k, v]) => `${s.plugin.measurements.find((m) => m.key === k)?.label ?? k} = ${v}`).join('; ') : 'chưa có';
+    const context = `Bài: ${plugin.title} (${SUBJECT_LABELS[plugin.subject]}). Đại lượng cần tìm: ${plugin.result.label}. Bước đang làm: ${step ? step.title : 'đã xong các bước'}. Thông số: ${paramText}. Đã ghi ${trials.length}/${plugin.minTrials} lần đo; lần gần nhất: ${lastText}. Kết quả học sinh nhập: ${s.studentValue || 'chưa nhập'}.`;
     const started = Date.now();
     const remaining = (): number => Math.max(500, APP_CONFIG.aiTimeoutMs - (Date.now() - started));
     // 1) Máy chủ lớp / cloud
@@ -334,6 +341,11 @@ export default function AiTutorDrawer() {
         )}
         <div ref={endRef} />
       </div>
+      {!blocked && left > 0 && left <= 5 && (
+        <p className="mx-3 rounded-lg border border-amber-500/60 bg-amber-900/30 p-2 text-xs text-amber-200" role="status">
+          ⚠ Hôm nay chỉ còn {left} lượt hỏi AI. Hãy hỏi những điều quan trọng nhất.
+        </p>
+      )}
       {blocked ? (
         <p className="mx-3 flex items-start gap-2 rounded-lg border border-amber-500/60 bg-amber-900/30 p-2 text-xs text-amber-200" role="status">
           <WifiOff size={14} className="mt-0.5 shrink-0" /> {blockReason}

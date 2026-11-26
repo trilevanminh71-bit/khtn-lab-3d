@@ -11,7 +11,7 @@ export const photogateSpeedPlugin: LabPluginDef = {
   version: 2,
   subject: 'physics',
   title: 'Thực hành: Đo tốc độ của vật chuyển động',
-  shortTitle: 'Bài 6 – Đo tốc độ',
+  shortTitle: 'Bài 6 – Thực hành: Đo tốc độ',
   sgkRef: 'Vật lí 10 – Bài 6: Thực hành: Đo tốc độ của vật chuyển động',
   chapter: 'Chương II. Động học',
   grade: 10,
@@ -47,6 +47,10 @@ export const photogateSpeedPlugin: LabPluginDef = {
     { id: 't-trial', title: 'Thời gian theo lần đo', kind: 'line', x: 'index', y: 't', xLabel: 'Lần đo', yLabel: 't (s)', groupBy: 'mode' }
   ],
   tools: ['mc964'],
+  tables: [
+    { title: 'Bảng 6.1 – Đo tốc độ trung bình (MODE A ↔ B)', showIf: { key: 'mode', in: [0] } },
+    { title: 'Bảng 6.2 – Đo tốc độ tức thời qua đường kính bi d (MODE A, MODE B)', showIf: { key: 'mode', in: [1, 2] } }
+  ],
   minTrials: 3,
   result: { key: 'v', label: 'Tốc độ của viên bi (theo chế độ và thông số lần đo cuối)', unit: 'm/s', tolerancePercent: 3, decimals: 3, hint: 'MODE A ↔ B: v̄ = s̄/t̄ (3 lần đo). MODE A/B: v = d/t̄. Đổi cm sang m.' },
   steps: [

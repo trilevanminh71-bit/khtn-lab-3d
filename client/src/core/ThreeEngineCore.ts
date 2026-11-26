@@ -30,6 +30,8 @@ export interface EngineOptions {
   autoAdaptive: boolean;
   minFps: number;
   highContrast: boolean;
+  /** Giao diện sáng: nền cảnh 3D màu nhạt */
+  light?: boolean;
 }
 
 interface View {
@@ -86,7 +88,7 @@ export class ThreeEngineCore {
     this.renderer.shadowMap.enabled = this.quality >= 2;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.setClearColor(opts.highContrast ? '#000000' : '#0b1220');
+    this.renderer.setClearColor(this.bg());
     this.renderer.domElement.style.touchAction = 'none';
     this.renderer.domElement.setAttribute('aria-label', 'Không gian thí nghiệm 3D');
     container.appendChild(this.renderer.domElement);
@@ -117,7 +119,7 @@ export class ThreeEngineCore {
   /* --------------------------- Quản lý cảnh --------------------------- */
   private makeView(handle: SceneHandle): View {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(this.opts.highContrast ? '#000000' : '#0b1220');
+    scene.background = new THREE.Color(this.bg());
     scene.fog = new THREE.Fog(scene.background as THREE.Color, 8, 18);
     scene.add(new THREE.HemisphereLight('#e0f2fe', '#1e293b', 1.1));
     const sun = new THREE.DirectionalLight('#ffffff', 1.6);
@@ -247,7 +249,17 @@ export class ThreeEngineCore {
 
   setOptions(opts: Partial<EngineOptions>): void {
     this.opts = { ...this.opts, ...opts };
-    this.renderer.setClearColor(this.opts.highContrast ? '#000000' : '#0b1220');
+    this.renderer.setClearColor(this.bg());
+    for (const v of [this.main, this.compare]) {
+      if (!v) continue;
+      v.scene.background = new THREE.Color(this.bg());
+      v.scene.fog = new THREE.Fog(this.bg(), 8, 18);
+    }
+  }
+
+  /** Màu nền cảnh theo tương phản cao / giao diện sáng */
+  private bg(): string {
+    return this.opts.highContrast ? '#000000' : this.opts.light ? '#dbe4ee' : '#0b1220';
   }
 
   setDebug(on: boolean): void {

@@ -99,6 +99,54 @@ input[type='range'] {
   height: 28px;
 }
 
+/* ---------- Giao diện sáng: ghi đè các lớp nền/chữ tối của Tailwind ---------- */
+html.theme-light { color-scheme: light; }
+html.theme-light body { background: #eef2f7; color: #0f172a; }
+html.theme-light .bg-slate-950 { background-color: #f8fafc !important; }
+html.theme-light .bg-slate-900,
+html.theme-light .bg-slate-900\/95,
+html.theme-light .bg-slate-900\/90 { background-color: #ffffff !important; }
+html.theme-light .bg-slate-800 { background-color: #e2e8f0 !important; }
+html.theme-light .bg-slate-700 { background-color: #cbd5e1 !important; }
+html.theme-light .hover\:bg-slate-800:hover,
+html.theme-light .hover\:bg-slate-700:hover { background-color: #e2e8f0 !important; }
+html.theme-light .text-slate-100,
+html.theme-light .text-slate-200,
+html.theme-light .text-white:not(.btn-primary):not(.bg-lab-700) { color: #0f172a !important; }
+html.theme-light .text-slate-300 { color: #334155 !important; }
+html.theme-light .text-slate-400 { color: #475569 !important; }
+html.theme-light .text-slate-500 { color: #64748b !important; }
+html.theme-light .text-amber-200,
+html.theme-light .text-amber-100 { color: #92400e !important; }
+html.theme-light .text-sky-100 { color: #075985 !important; }
+html.theme-light .text-lab-400 { color: #0f766e !important; }
+html.theme-light .border-slate-800,
+html.theme-light .border-slate-700,
+html.theme-light .border-slate-700\/70,
+html.theme-light .border-slate-600 { border-color: #cbd5e1 !important; }
+html.theme-light .bg-amber-900\/50,
+html.theme-light .bg-amber-900\/30,
+html.theme-light .bg-amber-900\/60 { background-color: #fef3c7 !important; }
+html.theme-light .bg-sky-900\/40 { background-color: #e0f2fe !important; }
+html.theme-light .bg-lab-900\/40 { background-color: #ccfbf1 !important; }
+html.theme-light .bg-slate-800\/60,
+html.theme-light .bg-slate-800\/70 { background-color: #f1f5f9 !important; }
+html.theme-light .bg-slate-900\/85,
+html.theme-light .bg-slate-950\/95 { background-color: #ffffff !important; }
+html.theme-light .text-amber-300 { color: #b45309 !important; }
+html.theme-light .text-emerald-200 { color: #047857 !important; }
+html.theme-light .text-red-200 { color: #b91c1c !important; }
+html.theme-light .btn { background-color: #ffffff; color: #0f172a; border-color: #94a3b8; }
+html.theme-light .btn:hover { background-color: #e2e8f0; }
+html.theme-light .btn-primary,
+html.theme-light .btn-primary:hover { background-color: #0d9488; color: #ffffff; border-color: #0f766e; }
+html.theme-light .btn-ghost { background-color: transparent; border-color: transparent; }
+html.theme-light .btn.bg-lab-700 { background-color: #0f766e !important; color: #ffffff !important; }
+html.theme-light .card,
+html.theme-light .panel { background-color: rgba(255, 255, 255, 0.95) !important; border-color: #cbd5e1 !important; color: #0f172a; }
+html.theme-light .input { background-color: #ffffff; color: #0f172a; border-color: #94a3b8; }
+html.theme-light .input::placeholder { color: #94a3b8; }
+
 /* Phiếu báo cáo A4 khi in */
 @media print {
   body * {

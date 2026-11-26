@@ -53,7 +53,7 @@ export function FloatingLabTools() {
             </button>
           </div>
         )}
-        <button className="btn min-h-[46px] rounded-full px-3 shadow-lg" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Công cụ">
+        <button className="btn min-h-[46px] rounded-full px-3 shadow-lg" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Công cụ" title="Trợ lý AI, máy tính, sổ tay">
           {menu ? <X size={18} /> : <Wrench size={18} />} <span className="hidden sm:inline">Công cụ</span>
         </button>
       </div>

@@ -12,6 +12,46 @@ import { Anim, box, cyl, disposeObject, makeBench, makeDisplay, makeLabel, makeS
 
 const metal = (): THREE.MeshStandardMaterial => mat('#94a3b8', { metalness: 0.7, roughness: 0.3 });
 
+const BEAM_IDLE = '#7f1d1d';
+/** Tia cổng quang điện: bị chắn → chớp đỏ sáng */
+function setBeam(m: THREE.MeshBasicMaterial, blocked: boolean): void {
+  m.color.set(blocked ? '#ff3b3b' : BEAM_IDLE);
+  m.opacity = blocked ? 1 : 0.35;
+}
+
+/** Vệt quỹ đạo: đường nối các vị trí đã qua của vật chuyển động */
+class Trail {
+  readonly line: THREE.Line;
+  private pts: Float32Array;
+  private n = 0;
+  constructor(max = 160, color = '#fbbf24') {
+    this.pts = new Float32Array(max * 3);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.pts, 3));
+    g.setDrawRange(0, 0);
+    this.line = new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 }));
+    this.line.frustumCulled = false;
+  }
+  clear(): void {
+    this.n = 0;
+    this.line.geometry.setDrawRange(0, 0);
+  }
+  push(p: THREE.Vector3): void {
+    if (this.n * 3 >= this.pts.length) return;
+    this.pts.set([p.x, p.y, p.z], this.n * 3);
+    this.n++;
+    const attr = this.line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    attr.needsUpdate = true;
+    this.line.geometry.setDrawRange(0, this.n);
+  }
+}
+
+/** Số hiển thị trên đồng hồ khi đang đếm: cùng số chữ số thập phân với kết quả cuối */
+function counting(value: number, final: string): string {
+  const dec = final.split('.')[1]?.length ?? 3;
+  return Math.max(0, value).toFixed(dec);
+}
+
 /** Cổng quang điện dạng chữ U, tia sáng đỏ; trả về vật liệu tia để nháy khi bị chắn */
 function makeGate(color: string, name: string): { g: THREE.Group; beam: THREE.MeshBasicMaterial } {
   const g = new THREE.Group();
@@ -22,7 +62,7 @@ function makeGate(color: string, name: string): { g: THREE.Group; beam: THREE.Me
   b.position.set(0, 0.05, 0.15);
   const top = box(0.035, 0.035, 0.335, m);
   top.position.set(0, 0.2, 0);
-  const beam = new THREE.MeshBasicMaterial({ color: '#ef4444', transparent: true, opacity: 0.65 });
+  const beam = new THREE.MeshBasicMaterial({ color: BEAM_IDLE, transparent: true, opacity: 0.35 });
   const ray = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.28, 6), beam);
   ray.rotation.x = Math.PI / 2;
   const label = makeLabel(name, { size: 34 });
@@ -124,6 +164,10 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
   let xE = 20;
   let xF = 70;
   let shown = '0.000';
+  let modeText = '';
+  let ballD = 2;
+  const trail = new Trail();
+  incline.add(trail.line);
   const xOf = (cm: number): number => -len + (len * cm) / 100;
   const place = (cm: number): void => {
     ball.position.set(xOf(cm), 0.09, 0);
@@ -152,12 +196,15 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
       const s = vis.num(v, 'ballD', 2) / 2;
       ball.scale.setScalar(s);
       shown = vis.str(v, 'readout', '0.000');
-      setLabelText(mc.mode, vis.str(v, 'mode', 'MC964'), { size: 30 });
+      modeText = vis.str(v, 'mode', 'MC964');
+      ballD = vis.num(v, 'ballD', 2);
+      setLabelText(mc.mode, modeText, { size: 30 });
       if (nonce !== lastNonce) {
         lastNonce = nonce;
+        trail.clear();
         if (vis.num(v, 'animMs') > 0) {
           anim.start(vis.num(v, 'animMs'));
-          mc.display.set('0.000');
+          mc.display.set(counting(0, shown));
           place(0);
         } else {
           anim.reset();
@@ -174,12 +221,26 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
         const q = anim.tick(dt);
         const cm = q * q * 100;
         place(cm);
-        if (cm >= xF || !anim.active) mc.display.set(shown);
-        E.beam.color.set(Math.abs(cm - xE) < 3 ? '#22c55e' : '#ef4444');
-        F.beam.color.set(Math.abs(cm - xF) < 3 ? '#22c55e' : '#ef4444');
+        trail.push(ball.position);
+        // Đồng hồ chạy số theo thời gian thực của hoạt cảnh (q tỉ lệ với thời gian: x = 100·q²)
+        const final = Number(shown);
+        const r = ballD / 2;
+        if (modeText.includes('↔')) {
+          const qE = Math.sqrt(xE / 100);
+          const qF = Math.sqrt(xF / 100);
+          mc.display.set(q < qE ? counting(0, shown) : q < qF ? counting(((q - qE) / (qF - qE)) * final, shown) : shown);
+        } else {
+          const x = modeText.endsWith('B') ? xF : xE;
+          const q0 = Math.sqrt(Math.max(0, x - r) / 100);
+          const q1 = Math.sqrt((x + r) / 100);
+          mc.display.set(q < q0 ? counting(0, shown) : q < q1 ? counting(((q - q0) / (q1 - q0)) * final, shown) : shown);
+        }
+        if (!anim.active) mc.display.set(shown);
+        setBeam(E.beam, Math.abs(cm - xE) < r);
+        setBeam(F.beam, Math.abs(cm - xF) < r);
       } else {
-        E.beam.color.set('#ef4444');
-        F.beam.color.set('#ef4444');
+        setBeam(E.beam, false);
+        setBeam(F.beam, false);
       }
     },
     dispose: () => disposeObject(root)
@@ -230,6 +291,8 @@ export function buildFreeFall2Scene(): SceneHandle {
   let lastNonce = -1;
   let shown = '0.000';
   let s = 50;
+  const trail = new Trail(160, '#fbbf24');
+  root.add(trail.line);
   const start = topY + 0.02;
   body.position.set(0, start, 0);
   return {
@@ -249,9 +312,10 @@ export function buildFreeFall2Scene(): SceneHandle {
       if (nonce !== lastNonce) {
         lastNonce = nonce;
         body.position.y = start;
+        trail.clear();
         if (vis.num(v, 'animMs') > 0) {
           anim.start(vis.num(v, 'animMs') * 1.15);
-          mc.display.set('0.000');
+          mc.display.set(counting(0, shown));
         } else {
           anim.reset();
           mc.display.set(shown);
@@ -263,14 +327,18 @@ export function buildFreeFall2Scene(): SceneHandle {
     },
     tick(dt) {
       if (!anim.active) {
-        F.beam.color.set('#ef4444');
+        setBeam(F.beam, false);
+        setBeam(E.beam, false);
         return;
       }
       const q = anim.tick(dt) * 1.15;
       const cm = s * q * q;
       body.position.y = Math.max(0.2, start - (cm / 100) * H);
-      if (q >= 1) mc.display.set(shown);
-      F.beam.color.set(Math.abs(q - 1) < 0.06 ? '#22c55e' : '#ef4444');
+      trail.push(new THREE.Vector3(0.06, body.position.y, 0));
+      // Đồng hồ chạy số: E sát điểm thả nên thời gian tỉ lệ với q
+      mc.display.set(q >= 1 ? shown : counting(q * Number(shown), shown));
+      setBeam(E.beam, q < 0.12);
+      setBeam(F.beam, Math.abs(q - 1) < 0.06);
     },
     dispose: () => disposeObject(root)
   };
@@ -510,8 +578,8 @@ export function buildAirtrackScene(): SceneHandle {
     },
     tick(dt) {
       if (anim.active) place(anim.tick(dt));
-      G1.beam.color.set(near(G1.g) ? '#22c55e' : '#ef4444');
-      G2.beam.color.set(snap.filled && near(G2.g) ? '#22c55e' : '#ef4444');
+      setBeam(G1.beam, near(G1.g));
+      setBeam(G2.beam, snap.filled && near(G2.g));
       marker.visible = !snap.filled;
     },
     dispose: () => disposeObject(root)

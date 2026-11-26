@@ -100,6 +100,14 @@ export interface ChartDef {
   groupBy?: string;
   refLine?: { value: number; label: string };
   showIf?: ShowIf;
+  /** Vẽ đường hồi quy tuyến tính và R² (dãy duy nhất, ≥ 2 giá trị x) */
+  fit?: 'linear';
+}
+
+/** Tách bảng số liệu thành nhiều bảng theo chế độ (ví dụ Bảng 6.1 / 6.2) */
+export interface TableGroup {
+  title: string;
+  showIf: ShowIf;
 }
 
 /** Khối giải thích trực tiếp theo thông số đang chọn */
@@ -218,6 +226,7 @@ export interface LabPluginDef {
   derived?: DerivedDef[];
   charts?: ChartDef[];
   tools?: LessonTool[];
+  tables?: TableGroup[];
 }
 
 /** Bài No-Code: mỗi lần đo = biểu thức của tham số + thông số ẩn + nhiễu */
@@ -245,6 +254,8 @@ export interface TrialRecord {
   params: Record<string, number>;
   values: Record<string, number>;
   at: number;
+  /** Hàng do học sinh tự nhập (đọc từ thiết bị thật) */
+  manual?: boolean;
 }
 
 /** Ngữ cảnh đưa vào solver */
@@ -386,6 +397,8 @@ export interface AppSettings {
   pinHash: string;
   remoteUpdateUrl: string;
   showOnboarding: boolean;
+  /** Giao diện sáng / tối / theo hệ thống */
+  theme: 'dark' | 'light' | 'system';
 }
 
 /** Ngộ nhận khoa học */

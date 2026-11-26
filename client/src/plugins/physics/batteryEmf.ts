@@ -11,7 +11,7 @@ export const batteryEmfPlugin: LabPluginDef = {
   version: 1,
   subject: 'physics',
   title: 'Đo suất điện động và điện trở trong của pin điện hóa',
-  shortTitle: 'Suất điện động & điện trở trong',
+  shortTitle: '[Vật lí 11 — Mở rộng] Suất điện động & điện trở trong',
   sgkRef: 'Chuyên đề mở rộng (tham chiếu Vật lí 11 KNTT – Bài thực hành đo suất điện động và điện trở trong của pin)',
   chapter: 'Mở rộng: Dòng điện không đổi',
   grade: 10,
@@ -39,7 +39,7 @@ export const batteryEmfPlugin: LabPluginDef = {
     { key: 'I', label: 'Cường độ dòng điện I', unit: 'A', decimals: 3 },
     { key: 'U', label: 'Hiệu điện thế U', unit: 'V', decimals: 3 }
   ],
-  charts: [{ id: 'U-I', title: 'Đồ thị U theo I', kind: 'scatter', x: 'I', y: 'U', xLabel: 'I (A)', yLabel: 'U (V)' }],
+  charts: [{ id: 'U-I', title: 'Đồ thị U theo I', kind: 'scatter', fit: 'linear', x: 'I', y: 'U', xLabel: 'I (A)', yLabel: 'U (V)' }],
   minTrials: 5,
   result: { key: 'r', label: 'Điện trở trong r của pin', unit: 'Ω', tolerancePercent: 6, decimals: 2, hint: 'Đo ở ≥ 5 giá trị R khác nhau, vẽ U theo I; r = −ΔU/ΔI (hồi quy tuyến tính).' },
   steps: [

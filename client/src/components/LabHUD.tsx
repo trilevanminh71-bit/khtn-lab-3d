@@ -7,7 +7,7 @@
  *  - Tự lưu nháp mỗi 5 giây vào IndexedDB; thẻ "Tiếp tục bài đang làm dở"; biểu đồ và phiếu thí nghiệm.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Bot, Calculator, Camera, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Eye, FileText, Play, Printer, RotateCcw, Ruler, UserRound } from 'lucide-react';
+import { Bot, Calculator, Camera, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Eye, FileText, Play, Printer, Repeat, RotateCcw, Ruler, TableProperties, UserRound } from 'lucide-react';
 import { hasUnsavedWork, useLabStore } from '../store/useLabStore';
 import { APP_CONFIG, SUBJECT_COLORS } from '../config/appConfig';
 import { clearDraft, saveDraft } from '../offline/db';
@@ -18,7 +18,9 @@ import { sanitizeCode } from '../utils/qrSyncCodec';
 import { hashString } from '../utils/randomizer';
 import { ModalShell } from './ModalShell';
 import { InsightPanel, Mc964Console, OxidationTool, ParamControls, PrincipleBox, ResumeCard, SummaryPanel } from './LessonPanels';
-import { TrialTable } from './TrialTable';
+import { ManualRowForm, TrialTable } from './TrialTable';
+import { getSolver } from '../engines/solverRegistry';
+import { parseViNumber } from '../services/appServices';
 import { ChartGrid } from './DataChart';
 import type { QuizQuestion } from '../types/lab';
 
@@ -154,6 +156,49 @@ function More({ title, open, children }: { title: string; open?: boolean; childr
   );
 }
 
+/** Đối chiếu sau khi nộp: giá trị em nhập – từ số liệu – lí thuyết – sai số tỉ đối */
+function ResultCompare() {
+  const plugin = useLabStore((s) => s.plugin);
+  const trials = useLabStore((s) => s.trials);
+  const studentValue = useLabStore((s) => s.studentValue);
+  const rows = useMemo(() => {
+    const s = useLabStore.getState();
+    const solver = getSolver(plugin.solverId);
+    const last = trials[trials.length - 1];
+    const base = s.solveContext();
+    const ctx = last ? { ...base, params: last.params } : base;
+    let est = Number.NaN;
+    try {
+      est = solver.estimateFromTrials(trials, ctx);
+    } catch {
+      est = Number.NaN;
+    }
+    return { truth: solver.trueResult(ctx), est, mine: parseViNumber(studentValue) };
+  }, [plugin, trials, studentValue]);
+  const d = plugin.result.decimals + 1;
+  const pct = (x: number): string => (Number.isFinite(x) && Number.isFinite(rows.truth) && rows.truth !== 0 ? `${fmtVi((Math.abs(x - rows.truth) / Math.abs(rows.truth)) * 100, 1)} %` : '—');
+  const val = (x: number): string => (Number.isFinite(x) ? fmtVi(x, d) : '—');
+  return (
+    <section className="rounded-lg border border-slate-700 p-2" aria-label="Đối chiếu kết quả">
+      <h3 className="mb-1 text-sm font-semibold">Đối chiếu kết quả {plugin.result.unit ? `(${plugin.result.unit})` : ''}</h3>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-slate-400">
+            <th className="p-1">Giá trị</th>
+            <th className="p-1">Số</th>
+            <th className="p-1">Sai số so với lí thuyết</th>
+          </tr>
+        </thead>
+        <tbody className="font-mono">
+          <tr><td className="p-1 font-sans">Em nhập</td><td className="p-1">{val(rows.mine)}</td><td className="p-1">{pct(rows.mine)}</td></tr>
+          <tr><td className="p-1 font-sans">Từ số liệu đo</td><td className="p-1">{val(rows.est)}</td><td className="p-1">{pct(rows.est)}</td></tr>
+          <tr><td className="p-1 font-sans">Lí thuyết</td><td className="p-1">{val(rows.truth)}</td><td className="p-1">—</td></tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 /* --------------------------------- HUD ---------------------------------- */
 export function LabHUD() {
   const ppe = useLabStore((s) => s.ppe);
@@ -166,6 +211,8 @@ export function LabHUD() {
   const conclusion = useLabStore((s) => s.conclusion);
   const modal = useLabStore((s) => s.modal);
   const submitted = useLabStore((s) => s.submitted);
+  const pending = useLabStore((s) => s.pendingTrial);
+  const params = useLabStore((s) => s.params);
   const [tab, setTab] = useState<Tab>('steps');
   const [quizOpen, setQuizOpen] = useState(false);
   const [showPre, setShowPre] = useState(false);
@@ -220,6 +267,16 @@ export function LabHUD() {
       st().toast(r.ok ? 'info' : 'warning', r.message);
     });
   };
+  const doCommit = (): void => {
+    const r = st().commitPending();
+    st().toast(r.ok ? 'success' : 'warning', r.message);
+  };
+  const doAuto = (n: number): void => {
+    void measureGuard.run(() => {
+      const r = st().autoMeasure(n);
+      st().toast(r.ok ? 'success' : 'warning', r.message);
+    });
+  };
   const doReset = (): void =>
     st().askConfirm({
       title: 'Làm lại thí nghiệm?',
@@ -243,15 +300,20 @@ export function LabHUD() {
   const missingPpe = currentStep?.requiresPpe ? plugin.ppeRequired.filter((k) => !ppe[k]) : [];
   const need = Math.max(0, plugin.minTrials - trials.length);
   /** Một hành động chính duy nhất cho bước hiện tại */
+  const measureLabel = currentStep?.trigger === 'ball' ? 'Thả bi' : 'Đo';
   const primary: { label: string; run: () => void; icon: typeof Play } = submitted
     ? { label: 'Xem phiếu báo cáo', run: () => st().openModal('report'), icon: FileText }
+    : !session
+      ? { label: 'Nhập tên và lớp để bắt đầu', run: () => st().openModal('session'), icon: UserRound }
+    : pending
+      ? { label: 'Ghi vào bảng', run: doCommit, icon: TableProperties }
     : !currentStep
       ? { label: 'Nhập kết quả', run: () => setTab('result'), icon: CheckCircle2 }
       : currentStep.action === 'measure'
-        ? { label: 'Đo', run: doMeasure, icon: Ruler }
+        ? { label: measureLabel, run: doMeasure, icon: Ruler }
         : currentStep.action === 'record'
           ? need > 0
-            ? { label: `Đo tiếp (còn ${need} lần)`, run: doMeasure, icon: Ruler }
+            ? { label: `${measureLabel} tiếp (còn ${need} lần)`, run: doMeasure, icon: Ruler }
             : { label: 'Đã đo đủ, tiếp tục', run: doStep, icon: CheckCircle2 }
           : currentStep.action === 'adjust'
             ? { label: 'Chọn xong, tiếp tục', run: doStep, icon: CheckCircle2 }
@@ -323,13 +385,33 @@ export function LabHUD() {
                   <ParamControls />
                 </div>
               )}
-              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={missingPpe.length > 0 && !submitted}>
+              {!session && <p className="mt-1.5 rounded bg-sky-900/40 p-1.5 text-sm text-sky-100">Em cần nhập họ tên, mã học sinh và mã lớp trước khi làm thí nghiệm.</p>}
+              {pending && session && (
+                <p className="mt-1.5 rounded bg-slate-800 p-1.5 font-mono text-sm text-amber-200" role="status">
+                  Vừa đo: {Object.entries(pending.values).map(([k, v]) => { const m = plugin.measurements.find((x) => x.key === k); return `${m?.label ?? k} = ${m?.valueLabels?.[String(v)] ?? fmtVi(v, m?.decimals ?? 3)}${m?.unit ? ` ${m.unit}` : ''}`; }).join('; ')}
+                </p>
+              )}
+              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={missingPpe.length > 0 && !submitted && !!session}>
                 <PrimaryIcon size={19} /> {primary.label}
               </button>
-              {measured && !submitted && (!currentStep || (currentStep.action === 'record' && need === 0)) && (
+              {pending && session && (
+                <button className="btn-ghost mt-1 w-full text-xs" onClick={() => st().discardPending()} title="Lần đo bất thường — không ghi vào bảng">
+                  Bỏ lần đo này
+                </button>
+              )}
+              {!pending && session && measured && !submitted && (!currentStep || (currentStep.action === 'record' && need === 0)) && (
                 <button className="btn mt-1.5 w-full" onClick={doMeasure}>
                   <Ruler size={16} /> Đo thêm
                 </button>
+              )}
+              {!pending && session && !submitted && currentStep && ['measure', 'record'].includes(currentStep.action) && missingPpe.length === 0 && (
+                <div className="mt-1.5 grid grid-cols-2 gap-1">
+                  {[3, 5].map((n) => (
+                    <button key={n} className="btn text-xs" onClick={() => doAuto(n)} title={`Đo và ghi tự động ${n} lần liên tiếp với thông số đang chọn`}>
+                      <Repeat size={14} /> Đo lặp ×{n}
+                    </button>
+                  ))}
+                </div>
               )}
             </section>
 
@@ -399,16 +481,19 @@ export function LabHUD() {
           </>
         ) : tab === 'data' ? (
           trials.length === 0 ? (
-            <div className="space-y-2 p-2 text-center text-sm text-slate-300">
-              <p>Chưa có số liệu. Hãy làm thí nghiệm và bấm Đo.</p>
+            <div className="space-y-2 text-sm text-slate-300">
+              <p className="text-center">Chưa có số liệu. Hãy làm thí nghiệm, đo rồi bấm Ghi vào bảng.</p>
+              <TrialTable plugin={plugin} trials={trials} example={params} />
               <button className="btn-primary min-h-[46px] w-full" onClick={() => setTab('steps')}>
                 Đi tới thí nghiệm
               </button>
+              <ManualRowForm />
             </div>
           ) : (
             <>
               <p className={`text-sm font-semibold ${need > 0 ? 'text-warn' : 'text-ok'}`}>{need > 0 ? `Đã đo ${trials.length} lần, cần thêm ${need} lần.` : `✓ Đã đo đủ ${trials.length} lần.`}</p>
               <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} />
+              <ManualRowForm />
               <SummaryPanel />
               <ChartGrid plugin={plugin} trials={trials} limit={1} />
               <More title="Biểu đồ khác">
@@ -450,6 +535,7 @@ export function LabHUD() {
             <button className="btn-primary min-h-[50px] w-full text-base" onClick={() => st().openModal('report')}>
               <FileText size={18} /> {submitted ? 'Xem phiếu báo cáo' : 'Nộp bài'}
             </button>
+            {submitted && <ResultCompare />}
             <More title="Công cụ hỗ trợ">
               <div className="grid gap-1.5">
                 <button className="btn" onClick={() => st().setToolsOpen(true)}>

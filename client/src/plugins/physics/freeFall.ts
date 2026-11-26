@@ -10,7 +10,7 @@ export const freeFallPlugin: LabPluginDef = {
   version: 2,
   subject: 'physics',
   title: 'Thực hành: Đo gia tốc rơi tự do',
-  shortTitle: 'Bài 11 – Gia tốc rơi tự do',
+  shortTitle: 'Bài 11 – Thực hành: Đo gia tốc rơi tự do',
   sgkRef: 'Vật lí 10 – Bài 11: Thực hành: Đo gia tốc rơi tự do',
   chapter: 'Chương II. Động học',
   grade: 10,

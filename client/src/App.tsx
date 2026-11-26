@@ -26,6 +26,7 @@ import { flushSyncQueue } from './offline/db';
 import { currentApiUrl, reloadPlugins } from './services/appServices';
 import { RemoteSyncManager } from './offline/RemoteSyncManager';
 import { SOLVER_IDS } from './engines/solverRegistry';
+import { useIsLight } from './utils/theme';
 
 const UserGuideModal = lazy(() => import('./components/UserGuideModal'));
 const LabReportModal = lazy(() => import('./components/LabReportModal'));
@@ -56,6 +57,11 @@ export default function App() {
   const ppe = useLabStore((s) => s.ppe);
   const plugin = useLabStore((s) => s.plugin);
   const [glKey, setGlKey] = useState(0);
+  const light = useIsLight();
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-light', light);
+    document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+  }, [light]);
   const missingPpe = plugin.ppeRequired.filter((k) => !ppe[k]);
   // Cảnh báo bảo hộ chỉ hiện khi thật sự còn thiếu (trừ khi giám khảo giả lập trong chế độ KHKT)
   const incidents = activeIncidents.filter((id) => id !== 'ppe-missing' || missingPpe.length > 0 || khkt);

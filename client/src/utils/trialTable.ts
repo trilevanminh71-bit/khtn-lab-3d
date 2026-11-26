@@ -90,6 +90,17 @@ export function cellText(c: TableColumn, trial: TrialRecord, derived: Record<str
   return v.toLocaleString('vi-VN', { maximumFractionDigits: c.decimals });
 }
 
+/** Một lần đo VÍ DỤ (thông số ẩn lấy giữa khoảng, không phải của học sinh) để minh họa cách ghi bảng */
+export function exampleTrial(plugin: LabPluginDef, params: Record<string, number>): TrialRecord | null {
+  try {
+    const hidden = Object.fromEntries(plugin.hidden.map((h) => [h.key, Number(((h.min + h.max) / 2).toFixed(h.decimals))]));
+    const r = getSolver(plugin.solverId).measure({ plugin, params, hidden, ppe: { goggles: true, gloves: true, labelCheck: true }, rng: () => 0.5 });
+    return { index: 0, params: { ...params }, values: r.values, at: 0 };
+  } catch {
+    return null;
+  }
+}
+
 /** Xử lí số liệu tự động của bài; lỗi dữ liệu → danh sách rỗng */
 export function safeSummary(plugin: LabPluginDef, trials: TrialRecord[]): SummaryLine[] {
   try {

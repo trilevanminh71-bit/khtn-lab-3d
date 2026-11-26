@@ -7,6 +7,8 @@
 import { useMemo, useState } from 'react';
 import type { ChartDef, LabPluginDef, TrialRecord } from '../types/lab';
 import { buildColumns, cellNumber, derivedValues, matchShowIf, optionLabel } from '../utils/trialTable';
+import { linearRegression } from '../engines/statistics';
+import { useIsLight } from '../utils/theme';
 
 const THEME = {
   screen: { series: ['#3987e5', '#d95926', '#199e70'], ink: '#e2e8f0', muted: '#94a3b8', grid: '#1e293b', axis: '#475569', surface: '#0f172a' },
@@ -91,7 +93,8 @@ function Marker({ slot, cx, cy, color, surface }: { slot: number; cx: number; cy
 
 export function DataChart({ plugin, trials, def, mode = 'screen' }: { plugin: LabPluginDef; trials: TrialRecord[]; def: ChartDef; mode?: 'screen' | 'print' }) {
   const [active, setActive] = useState<{ s: number; i: number } | null>(null);
-  const C = THEME[mode];
+  const light = useIsLight();
+  const C = THEME[mode === 'print' || light ? 'print' : 'screen'];
   const series = useMemo(() => chartSeries(plugin, trials, def), [plugin, trials, def]);
   const all = series.flatMap((s) => s.points);
   if (all.length === 0) return null;
@@ -121,6 +124,9 @@ export function DataChart({ plugin, trials, def, mode = 'screen' }: { plugin: La
         })
       )
     : [];
+  // Hồi quy tuyến tính (chỉ khi một dãy, ≥ 2 giá trị x khác nhau)
+  const fitPts = def.fit && !bar && series.length === 1 ? series[0].points : [];
+  const reg = fitPts.length >= 2 && new Set(fitPts.map((q) => q.x)).size >= 2 ? linearRegression(fitPts.map((q) => q.x), fitPts.map((q) => q.y)) : null;
   const tip = active ? (bar ? bars.find((b) => b.si === active.s && b.i === active.i) : series[active.s]?.points[active.i]) : undefined;
   const tipX = tip ? sx(tip.x) : 0;
   const tipText = tip ? [`${def.xLabel}: ${tip.xText}`, `${def.yLabel}: ${fmt(tip.y)}${bar && 'n' in tip && tip.n > 1 ? ` (TB ${tip.n} lần)` : ''}`] : [];
@@ -221,6 +227,9 @@ export function DataChart({ plugin, trials, def, mode = 'screen' }: { plugin: La
             </text>
           </g>
         )}
+        {reg && Number.isFinite(reg.slope) && (
+          <line x1={sx(xLo)} x2={sx(xHi)} y1={sy(Math.min(y1, Math.max(y0, reg.intercept + reg.slope * xLo)))} y2={sy(Math.min(y1, Math.max(y0, reg.intercept + reg.slope * xHi)))} stroke={C.muted} strokeWidth={1.5} strokeDasharray="6 4" />
+        )}
         {!bar &&
           series.map((s, si) => {
             const sorted = [...s.points].sort((a, b) => a.x - b.x || a.trial - b.trial);
@@ -250,6 +259,11 @@ export function DataChart({ plugin, trials, def, mode = 'screen' }: { plugin: La
           </g>
         )}
       </svg>
+      {reg && Number.isFinite(reg.slope) && (
+        <figcaption className="mt-0.5 font-mono text-[11px]" style={{ color: C.muted }}>
+          Hồi quy: y = {fmt(reg.slope)}·x {reg.intercept < 0 ? '−' : '+'} {fmt(Math.abs(reg.intercept))} · R² = {reg.r2.toLocaleString('vi-VN', { maximumFractionDigits: 4 })}
+        </figcaption>
+      )}
     </figure>
   );
 }

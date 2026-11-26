@@ -3,7 +3,8 @@
  * Menu phụ chứa: So sánh 3D, Cổng giáo viên (PIN), Chế độ KHKT (PIN), Cài đặt, trạng thái mạng / máy chủ / đồ họa.
  */
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Columns2, HelpCircle, Menu, Settings, Trophy, WifiOff } from 'lucide-react';
+import { BookOpen, Columns2, HelpCircle, Menu, Moon, Settings, Sun, Trophy, WifiOff } from 'lucide-react';
+import { useIsLight } from '../utils/theme';
 import { APP_CONFIG, SUBJECT_LABELS } from '../config/appConfig';
 import { useLabStore } from '../store/useLabStore';
 import { SUBJECT_ICONS } from './LessonPicker';
@@ -19,6 +20,7 @@ export function Navbar() {
   const split = useLabStore((s) => s.splitScreen);
   const khkt = useLabStore((s) => s.khktMode);
   const [open, setOpen] = useState(false);
+  const light = useIsLight();
   const menuRef = useRef<HTMLDivElement>(null);
   const st = useLabStore.getState;
 
@@ -65,11 +67,14 @@ export function Navbar() {
           <WifiOff size={13} /> <span className="hidden sm:inline">Không có mạng</span>
         </span>
       )}
-      <button className="btn min-h-[44px] px-2.5" onClick={() => st().openModal('guide')} aria-label="Trợ giúp">
+      <button className="btn min-h-[44px] px-2.5" onClick={() => st().updateSettings({ theme: light ? 'dark' : 'light' })} aria-label={light ? 'Chuyển giao diện tối' : 'Chuyển giao diện sáng'} title={light ? 'Giao diện tối' : 'Giao diện sáng'}>
+        {light ? <Moon size={18} /> : <Sun size={18} />}
+      </button>
+      <button className="btn min-h-[44px] px-2.5" onClick={() => st().openModal('guide')} aria-label="Trợ giúp" title="Trợ giúp và hướng dẫn">
         <HelpCircle size={18} /> <span className="hidden sm:inline">Trợ giúp</span>
       </button>
       <div className="relative" ref={menuRef}>
-        <button className="btn min-h-[44px] px-2.5" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" aria-label="Menu" data-tour="teacher">
+        <button className="btn min-h-[44px] px-2.5" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" aria-label="Menu" title="Menu: Cổng giáo viên, Cài đặt…" data-tour="teacher">
           <Menu size={18} /> <span className="hidden sm:inline">Menu</span>
         </button>
         {open && (

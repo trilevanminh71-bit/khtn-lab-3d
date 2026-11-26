@@ -80,6 +80,26 @@ def database_kind() -> str:
     return "postgresql" if engine.url.get_backend_name().startswith("postgresql") else "sqlite"
 
 
+# Cột thêm sau phiên bản đầu: create_all không sửa bảng đã có → tự thêm cột còn thiếu
+_ADDED_COLUMNS = {
+    "submissions": {"valid_trials": "INTEGER", "reported_seed": "BIGINT", "flags": "JSON"},
+}
+
+
+def _add_missing_columns(conn) -> None:  # type: ignore[no-untyped-def]
+    from sqlalchemy import inspect, text
+
+    insp = inspect(conn)
+    for table, cols in _ADDED_COLUMNS.items():
+        if not insp.has_table(table):
+            continue
+        have = {c["name"] for c in insp.get_columns(table)}
+        for name, ddl in cols.items():
+            if name not in have:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+                logger.info("Đã thêm cột %s.%s", table, name)
+
+
 async def init_db() -> None:
     """Tạo bảng; nếu PostgreSQL lỗi kết nối thì chuyển sang SQLite cục bộ để lớp học vẫn chạy."""
     global engine, SessionLocal
@@ -88,6 +108,7 @@ async def init_db() -> None:
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_add_missing_columns)
     except Exception as exc:  # pragma: no cover - phụ thuộc mạng
         if database_kind() == "sqlite":
             raise
@@ -97,6 +118,7 @@ async def init_db() -> None:
         SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_add_missing_columns)
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

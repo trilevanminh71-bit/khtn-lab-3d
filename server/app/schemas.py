@@ -36,8 +36,18 @@ class SubmissionIn(CamelModel):
     created_at: int = Field(description="Thời điểm nộp (mili-giây Unix)")
     synced: bool = True
     source: str = "lan"
+    # --- Bằng chứng để máy chủ kiểm tra (client mới gửi; client cũ không có → gắn cờ "thieu-bang-chung")
+    valid_trials: Optional[int] = Field(default=None, ge=0, le=500)
+    min_trials: Optional[int] = Field(default=None, ge=0, le=50)
+    data_estimate: Optional[float] = None
+    seed: Optional[int] = Field(default=None, ge=0, le=0xFFFFFFFF)
+    pre_answered: Optional[bool] = None
+    post_answered: Optional[bool] = None
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=300)
+    # Do máy chủ tính, client gửi lên bị bỏ qua
+    flags: list[str] = Field(default_factory=list)
 
-    @field_validator("result_value", "true_value", mode="before")
+    @field_validator("result_value", "true_value", "data_estimate", mode="before")
     @classmethod
     def _nan_to_none(cls, v: Any) -> Any:
         """Client gửi NaN (JSON null) khi chưa có giá trị → lưu NULL."""
@@ -56,17 +66,25 @@ class SubmissionIn(CamelModel):
 
 
 class SubmissionOut(SubmissionIn):
-    pass
+    # Không trả nhật kí thao tác trong danh sách (nặng); xem riêng qua /api/submissions/{uid}/events
+    events: list[dict[str, Any]] = Field(default_factory=list, exclude=True)
 
 
 class SyncRequest(BaseModel):
     submissions: list[SubmissionIn] = Field(max_length=500)
 
 
+class RejectedItem(CamelModel):
+    uid: str
+    reasons: list[str]
+
+
 class SyncResponse(CamelModel):
     received: int
     inserted: int
     duplicates: int
+    rejected: list[RejectedItem] = Field(default_factory=list)
+    flagged: int = 0
 
 
 class ClassAnalytics(CamelModel):
@@ -74,6 +92,7 @@ class ClassAnalytics(CamelModel):
     count: int
     average_score: float
     average_gain: float
+    flagged: int = 0
     misconceptions: dict[str, int]
     submissions: list[SubmissionOut]
 
@@ -133,6 +152,9 @@ class TutorIn(BaseModel):
     subject: str = Field(default="physics", max_length=20)
     question: str = Field(min_length=1, max_length=800)
     context: str = Field(default="", max_length=1500)
+    # Định danh để tính hạn mức AI theo học sinh (không có → tính theo địa chỉ IP)
+    student_code: str = Field(default="", max_length=16)
+    class_code: str = Field(default="", max_length=16)
 
 
 class TutorOut(BaseModel):

@@ -5,6 +5,7 @@
  */
 import { validTrials } from '../utils/trialTable';
 import { checkSubmission } from '../utils/submitCheck';
+import { getActionLog } from '../utils/bugSnapshot';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Printer, Send, Star } from 'lucide-react';
@@ -113,7 +114,14 @@ export default function LabReportModal() {
         durationSec: Math.round((Date.now() - s.startedAt) / 1000),
         createdAt: Date.now(),
         synced: false,
-        source: 'local'
+        source: 'local',
+        validTrials: check.validCount,
+        minTrials: s.plugin.minTrials,
+        dataEstimate: Number.isFinite(computed.dataEstimate) ? computed.dataEstimate : undefined,
+        seed: session?.seed,
+        preAnswered: s.plugin.preQuiz.length === 0 || s.preAnswers.some((a) => a >= 0),
+        postAnswered: s.plugin.postQuiz.length === 0 || s.postAnswers.every((a) => a >= 0),
+        events: getActionLog().slice(-200)
       };
       const qrText = encodeQrPayload({
         classCode: rec.classCode,
@@ -137,7 +145,9 @@ export default function LabReportModal() {
         await enqueueSync(rec);
         await audit('submit', `${uid} điểm ${rec.score}`);
         const n = await flushSyncQueue(currentApiUrl(), 4000);
-        s.toast(n > 0 ? 'success' : 'info', n > 0 ? 'Đã gửi bài về máy chủ lớp.' : 'Chưa kết nối máy chủ — bài đã lưu trên máy, hãy đưa mã QR cho thầy cô quét.');
+        const saved = await db.submissions.where('uid').equals(uid).first();
+        if (saved?.serverRejected?.length) s.toast('warning', `Máy chủ lớp không nhận bài: ${saved.serverRejected.join(' ')}`);
+        else s.toast(n > 0 ? 'success' : 'info', n > 0 ? 'Đã gửi bài về máy chủ lớp.' : 'Chưa kết nối máy chủ — bài đã lưu trên máy, hãy đưa mã QR cho thầy cô quét.');
       } catch {
         s.toast('warning', 'Không lưu được vào bộ nhớ trình duyệt (chế độ ẩn danh?). Hãy đưa mã QR cho thầy cô quét.');
       }

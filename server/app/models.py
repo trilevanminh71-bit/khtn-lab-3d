@@ -78,7 +78,49 @@ class Submission(Base):
     duration_sec: Mapped[int] = mapped_column(Integer, default=0)
     created_at_ms: Mapped[int] = mapped_column(BigInteger)
     source: Mapped[str] = mapped_column(String(16), default="lan")
+    # Kiểm tra phía máy chủ
+    valid_trials: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reported_seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    flags: Mapped[list] = mapped_column(JSON, default=list)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SubmissionEvent(Base):
+    """Nhật kí thao tác gửi kèm bài nộp — lưu ở máy chủ, học sinh không xóa được."""
+
+    __tablename__ = "submission_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uid: Mapped[str] = mapped_column(String(160), index=True)
+    at_ms: Mapped[int] = mapped_column(BigInteger)
+    kind: Mapped[str] = mapped_column(String(40))
+    detail: Mapped[str] = mapped_column(String(300), default="")
+
+
+class RejectedSubmission(Base):
+    """Bài nộp bị từ chối (rỗng / bất thường) — lưu lại để giáo viên biết, không tính vào thống kê."""
+
+    __tablename__ = "rejected_submissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uid: Mapped[str] = mapped_column(String(160), index=True)
+    class_code: Mapped[str] = mapped_column(String(16), index=True)
+    student_code: Mapped[str] = mapped_column(String(16))
+    plugin_id: Mapped[str] = mapped_column(String(80))
+    reasons: Mapped[list] = mapped_column(JSON, default=list)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TutorUsage(Base):
+    """Số lượt hỏi AI mỗi ngày theo học sinh (hoặc IP) — hạn mức do máy chủ giữ, xóa IndexedDB không reset được."""
+
+    __tablename__ = "tutor_usage"
+    __table_args__ = (UniqueConstraint("day", "who", name="uq_tutor_usage_day_who"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    day: Mapped[str] = mapped_column(String(10), index=True)
+    who: Mapped[str] = mapped_column(String(80))
+    count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class CustomPlugin(Base):

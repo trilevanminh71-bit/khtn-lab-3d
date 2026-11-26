@@ -177,7 +177,7 @@ export default function AiTutorDrawer() {
           fetch(`${currentApiUrl()}/api/tutor/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plugin_id: plugin.id, subject: plugin.subject, question: q, context }),
+            body: JSON.stringify({ plugin_id: plugin.id, subject: plugin.subject, question: q, context, student_code: useLabStore.getState().session?.studentCode ?? '', class_code: useLabStore.getState().session?.classCode ?? '' }),
             signal
           }),
         remaining()

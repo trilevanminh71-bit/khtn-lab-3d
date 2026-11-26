@@ -133,12 +133,25 @@ export async function flushSyncQueue(apiUrl: string, timeoutMs = 6000): Promise<
       signal: ctrl.signal
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Máy chủ trả danh sách bài bị từ chối (rỗng / bất thường) → ghi lí do, không gửi lại
+    let rejected: Array<{ uid: string; reasons: string[] }> = [];
+    try {
+      const body: unknown = await res.json();
+      if (typeof body === 'object' && body !== null && Array.isArray((body as { rejected?: unknown }).rejected)) {
+        rejected = (body as { rejected: Array<{ uid: string; reasons: string[] }> }).rejected.filter((r) => typeof r?.uid === 'string');
+      }
+    } catch {
+      rejected = [];
+    }
     const ids = items.map((i) => i.id).filter((x): x is number => typeof x === 'number');
     await db.syncQueue.bulkDelete(ids);
+    const bad = new Map(rejected.map((r) => [r.uid, Array.isArray(r.reasons) ? r.reasons.map(String) : []]));
     for (const it of items) {
-      await db.submissions.where('uid').equals(it.uid).modify({ synced: true });
+      const reasons = bad.get(it.uid);
+      await db.submissions.where('uid').equals(it.uid).modify(reasons ? { synced: false, serverRejected: reasons } : { synced: true });
     }
-    return items.length;
+    if (bad.size) await audit('server-reject', `${bad.size} bài bị máy chủ từ chối`);
+    return items.length - bad.size;
   } catch {
     await db.syncQueue.toCollection().modify((it) => {
       it.tries += 1;

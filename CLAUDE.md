@@ -36,7 +36,7 @@ Backend: fastapi, uvicorn[standard], sqlalchemy[asyncio] (kèm greenlet — bắ
 - Font hệ thống (không CDN). PIN mặc định `2026` (lưu dạng SHA-256).
 - Cổng kiểm thử bắt buộc:
   - `cd client && npm install && npx tsc --noEmit && npm run test && npm run build`
-  - `python -m py_compile server/app/main.py server/app/database.py server/app/models.py server/app/schemas.py server/app/api/auth.py server/app/api/assignments.py server/app/api/submissions.py server/app/api/tutor.py`
+  - `python -m py_compile server/app/main.py server/app/database.py server/app/models.py server/app/schemas.py server/app/integrity.py server/app/api/auth.py server/app/api/assignments.py server/app/api/submissions.py server/app/api/tutor.py`
 
 ## 4. Ghi chú kĩ thuật đã kiểm chứng
 

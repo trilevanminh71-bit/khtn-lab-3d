@@ -12,12 +12,14 @@ import hashlib
 import logging
 import os
 import unicodedata
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
-from ..models import TutorCache
+from ..models import TutorCache, TutorUsage
 from ..schemas import TutorIn, TutorOut
 
 router = APIRouter(prefix="/api/tutor", tags=["Trợ lý AI"])
@@ -86,11 +88,46 @@ async def ask_gemini(question: str, context: str) -> str | None:
         return None
 
 
+def daily_quota() -> int:
+    """Hạn mức lượt hỏi AI mỗi ngày cho một học sinh (biến môi trường AI_DAILY_QUOTA, mặc định 30 — khớp client)."""
+    try:
+        return max(1, int(os.getenv("AI_DAILY_QUOTA", "30")))
+    except ValueError:
+        return 30
+
+
+async def consume_quota(session: AsyncSession, who: str) -> int:
+    """Tăng bộ đếm hôm nay; trả về số lượt còn lại. Hết lượt → HTTP 429 (client tự tạm nghỉ)."""
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    row = (await session.execute(select(TutorUsage).where(TutorUsage.day == day, TutorUsage.who == who))).scalars().first()
+    if row is None:
+        row = TutorUsage(day=day, who=who, count=0)
+        session.add(row)
+    if row.count >= daily_quota():
+        raise HTTPException(status_code=429, detail="Hôm nay em đã dùng hết lượt hỏi AI. Hẹn em ngày mai nhé!")
+    row.count += 1
+    await session.commit()
+    return daily_quota() - row.count
+
+
+def requester_id(body: TutorIn, request: Request) -> str:
+    """Định danh tính hạn mức: mã lớp + mã HS; không có thì dùng địa chỉ IP."""
+    from .auth import sanitize_code
+
+    code, cls = sanitize_code(body.student_code), sanitize_code(body.class_code)
+    if code and cls:
+        return f"hs:{cls}:{code}"[:80]
+    host = request.client.host if request.client else "unknown"
+    return f"ip:{host}"[:80]
+
+
 @router.post("/analyze", response_model=TutorOut)
-async def analyze(body: TutorIn, session: AsyncSession = Depends(get_session)) -> TutorOut:
+async def analyze(body: TutorIn, request: Request, session: AsyncSession = Depends(get_session)) -> TutorOut:
+    # Lời từ chối của guardrail không tính lượt; mọi câu hỏi khác (kể cả trả từ cache) đều trừ lượt ở máy chủ
     refusal = guardrail(body.question)
     if refusal:
         return TutorOut(answer=refusal, source="guardrail")
+    await consume_quota(session, requester_id(body, request))
     key = cache_key(body.plugin_id, body.question)
     cached = await session.get(TutorCache, key)
     if cached is not None:

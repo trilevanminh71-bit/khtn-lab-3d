@@ -383,6 +383,16 @@ export interface SubmissionRecord {
   createdAt: number;
   synced: boolean;
   source: 'local' | 'qr' | 'lan' | 'seed';
+  /** Bằng chứng gửi máy chủ kiểm tra (máy chủ tự gắn cờ / từ chối) */
+  validTrials?: number;
+  minTrials?: number;
+  dataEstimate?: number;
+  seed?: number;
+  preAnswered?: boolean;
+  postAnswered?: boolean;
+  events?: Array<{ at: number; type: string; detail: string }>;
+  /** Máy chủ từ chối bài này (lí do) — không thử gửi lại */
+  serverRejected?: string[];
 }
 
 /** Dữ liệu tối giản mã hóa trong QR (< 180 ký tự) */

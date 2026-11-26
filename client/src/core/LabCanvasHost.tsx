@@ -191,7 +191,18 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
         </div>
       )}
       {split && (
-        <div className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 bg-white/40" aria-hidden="true" />
+        <>
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 bg-white/40" aria-hidden="true" />
+          <span className="chip pointer-events-none absolute left-2 top-2 z-10 bg-slate-900/90 text-slate-100">Bên trái: {plugin.shortTitle} (đang làm)</span>
+          <label className="absolute left-[calc(50%+0.5rem)] top-2 z-10 flex items-center gap-1 rounded-lg bg-slate-900/90 px-2 py-1 text-xs text-slate-100">
+            Bên phải (chỉ xem):
+            <select className="input w-auto py-0.5 text-xs" value={compareId ?? ''} onChange={(e) => useLabStore.getState().setSplitScreen(true, e.target.value)} aria-label="Chọn bài hiển thị bên phải">
+              {plugins.filter((p) => p.id !== plugin.id).map((p) => (
+                <option key={p.id} value={p.id}>{p.shortTitle}</option>
+              ))}
+            </select>
+          </label>
+        </>
       )}
     </div>
   );

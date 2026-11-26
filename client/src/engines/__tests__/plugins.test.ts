@@ -2,6 +2,7 @@
  * Kiểm thử tích hợp: mọi bài mặc định hợp lệ, và khi học sinh làm đúng quy trình chuẩn
  * (bộ thông số khuyến nghị dưới đây), kết quả suy ra từ số liệu nằm gần giá trị thực.
  */
+import { checkSubmission } from '../../utils/submitCheck';
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PLUGINS, CUSTOM_INDEX_BASE, mergePlugins, pluginByIndex, pluginIndexOf } from '../../plugins/pluginRegistry';
 import { buildColumns, cellText, derivedValues } from '../../utils/trialTable';
@@ -9,7 +10,7 @@ import { validatePluginDef } from '../../plugins/pluginValidator';
 import { getSolver, SOLVER_IDS } from '../solverRegistry';
 import { generateHiddenParams, mulberry32 } from '../../utils/randomizer';
 import { relativeError } from '../gradingEngine';
-import type { LabPluginDef, TrialRecord } from '../../types/lab';
+import type { LabPluginDef, SolveContext, TrialRecord } from '../../types/lab';
 import { MISCONCEPTIONS } from '../../data/misconceptionKB';
 
 /** Quy trình chuẩn: danh sách bộ thông số cho từng lần đo */
@@ -38,7 +39,7 @@ const PROTOCOLS: Record<string, Array<Record<string, number>>> = {
   'sh10-chi-so-nguyen-phan': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((field) => ({ sample: 1, field, fix: 20, stain: 15 }))
 };
 
-function runProtocol(plugin: LabPluginDef, seed: number): { est: number; truth: number } {
+function runProtocol(plugin: LabPluginDef, seed: number): { est: number; truth: number; trials: TrialRecord[]; ctx: SolveContext } {
   const solver = getSolver(plugin.solverId);
   const hidden = generateHiddenParams(plugin.hidden, seed);
   const base: Record<string, number> = {};
@@ -57,7 +58,7 @@ function runProtocol(plugin: LabPluginDef, seed: number): { est: number; truth: 
     return { index: i + 1, params: full, values: r.values, at: i };
   });
   const ctx = { plugin, params: trials[trials.length - 1].params, hidden, ppe, rng: mulberry32(seed) };
-  return { est: solver.estimateFromTrials(trials, ctx), truth: solver.trueResult(ctx) };
+  return { est: solver.estimateFromTrials(trials, ctx), truth: solver.trueResult(ctx), trials, ctx };
 }
 
 describe('Danh mục bài học', () => {
@@ -136,6 +137,19 @@ describe('Quy trình chuẩn cho kết quả trong sai số cho phép', () => {
         // Enthalpy có sai số hệ thống do thất thoát nhiệt — vẫn phải nằm trong ngưỡng cho phép
         expect(relativeError(est, truth), `${plugin.id} seed=${seed} est=${est} truth=${truth}`).toBeLessThanOrEqual(plugin.result.tolerancePercent);
       }
+    });
+  }
+});
+
+describe('Kiểm tra trước khi nộp bài', () => {
+  for (const plugin of BUILTIN_PLUGINS) {
+    it(`${plugin.shortTitle}: làm đúng quy trình thì nộp được, bài rỗng thì bị chặn`, () => {
+      const { est, trials, ctx } = runProtocol(plugin, 2026);
+      const base = { plugin, startedAt: Date.now() - 600000, preAnswers: plugin.preQuiz.map(() => 0), ctx };
+      const ok = checkSubmission({ ...base, trials, studentValue: String(est).replace('.', ','), conclusion: 'Kết quả đo phù hợp với lí thuyết trong sai số.' });
+      expect(ok.blockers, plugin.id).toEqual([]);
+      const empty = checkSubmission({ ...base, trials: [], studentValue: '', conclusion: '' });
+      expect(empty.blockers.length).toBeGreaterThanOrEqual(3);
     });
   }
 });

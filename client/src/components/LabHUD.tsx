@@ -24,6 +24,7 @@ import { parseViNumber } from '../services/appServices';
 import { ChartGrid } from './DataChart';
 import type { TrialRecord } from '../types/lab';
 import { validTrials, valueIssue } from '../utils/trialTable';
+import { checkSubmission } from '../utils/submitCheck';
 import type { QuizQuestion } from '../types/lab';
 
 const measureGuard = createGuard(700);
@@ -333,7 +334,11 @@ export function LabHUD() {
   const missingPpe = currentStep?.requiresPpe ? plugin.ppeRequired.filter((k) => !ppe[k]) : [];
   const need = Math.max(0, plugin.minTrials - (plugin.validity ? valid.length : trials.length));
   const pendingIssue = pending ? valueIssue(plugin, pending.values) : null;
-  const submitBlocked = !submitted && !!plugin.validity?.requireValidToSubmit && valid.length < plugin.minTrials;
+  const check = useMemo(() => {
+    const s = useLabStore.getState();
+    return checkSubmission({ plugin, trials, studentValue, conclusion, startedAt: s.startedAt, preAnswers: s.preAnswers, ctx: s.solveContext() });
+  }, [plugin, trials, studentValue, conclusion]);
+  const submitBlocked = !submitted && check.blockers.length > 0;
   /** Một hành động chính duy nhất cho bước hiện tại */
   const measureLabel = currentStep?.trigger === 'ball' ? 'Thả bi' : 'Đo';
   const primary: { label: string; run: () => void; icon: typeof Play } = submitted
@@ -571,7 +576,16 @@ export function LabHUD() {
                 {plugin.result.unit ? ` (${plugin.result.unit})` : ''}
               </label>
               <input id="student-value" className="input min-h-[46px] font-mono text-base" inputMode="decimal" value={studentValue} onChange={(e) => st().setStudentValue(e.target.value)} placeholder="Nhập số em tính được" disabled={submitted} />
-              {(submitted || !plugin.validity?.hideHintUntilSubmit) && <p className="mt-1 text-sm text-slate-400">💡 {plugin.result.hint}</p>}
+              {submitted ? (
+                <p className="mt-1 text-sm text-slate-400">💡 Cách tính: {plugin.result.hint}</p>
+              ) : (
+                !plugin.validity?.hideHintUntilSubmit && (
+                  <details className="mt-1 text-sm text-slate-400">
+                    <summary className="cursor-pointer">Bí quá? Xem gợi ý cách tính</summary>
+                    <p className="mt-0.5">💡 {plugin.result.hint}</p>
+                  </details>
+                )
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-semibold" htmlFor="conclusion">
@@ -579,10 +593,22 @@ export function LabHUD() {
               </label>
               <textarea id="conclusion" className="input min-h-[90px]" value={conclusion} onChange={(e) => st().setConclusion(e.target.value)} placeholder={plugin.conclusionPrompt} disabled={submitted} />
             </div>
-            {plugin.validity?.requireValidToSubmit && !submitted && (
-              <p className={`text-sm font-semibold ${submitBlocked ? 'text-warn' : 'text-ok'}`} role="status">
-                {valid.length}/{plugin.minTrials} lần đo hợp lệ{submitBlocked ? ' – cần đủ mới nộp được bài.' : ' ✓'}
-              </p>
+            {!submitted && (
+              <div className="space-y-1 text-sm" role="status">
+                <p className={`font-semibold ${valid.length < plugin.minTrials ? 'text-warn' : 'text-ok'}`}>
+                  {valid.length}/{plugin.minTrials} lần đo hợp lệ{valid.length >= plugin.minTrials ? ' ✓' : ''}
+                </p>
+                {check.blockers.length > 0 && (
+                  <ul className="list-disc rounded border border-amber-500/60 bg-amber-900/30 py-1 pl-6 pr-2 text-amber-100">
+                    {check.blockers.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                )}
+                {check.blockers.length === 0 && check.warnings.map((w) => (
+                  <p key={w} className="text-xs text-amber-200">⚠ {w}</p>
+                ))}
+              </div>
             )}
             <button className="btn-primary min-h-[50px] w-full text-base" onClick={() => st().openModal('report')} disabled={submitBlocked}>
               <FileText size={18} /> {submitted ? 'Xem phiếu báo cáo' : 'Nộp bài'}

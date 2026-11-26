@@ -43,7 +43,7 @@ export function Navbar() {
 
   const items: Array<{ label: string; Icon: typeof Settings; on?: boolean; run: () => void }> = [
     { label: 'Cổng giáo viên', Icon: BookOpen, run: () => st().requestPin('teacher') },
-    { label: split ? 'Tắt so sánh 2 thí nghiệm' : 'So sánh 2 thí nghiệm', Icon: Columns2, on: split, run: () => st().setSplitScreen(!split) },
+    { label: split ? 'Tắt xem song song 2 bài' : 'Xem song song 2 bài (chỉ quan sát)', Icon: Columns2, on: split, run: () => st().setSplitScreen(!split) },
     { label: khkt ? 'Tắt chế độ KHKT' : 'Chế độ KHKT', Icon: Trophy, on: khkt, run: () => (khkt ? st().setKhktMode(false) : st().requestPin('khkt')) },
     { label: 'Cài đặt', Icon: Settings, run: () => st().openModal('settings') }
   ];

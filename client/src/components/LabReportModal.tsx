@@ -4,6 +4,7 @@
  *  → 3) Khảo sát Likert 5 sao → 4) Nộp: lưu IndexedDB, xếp hàng đồng bộ LAN, sinh MÃ QR < 180 ký tự để GV quét offline.
  */
 import { validTrials } from '../utils/trialTable';
+import { checkSubmission } from '../utils/submitCheck';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Printer, Send, Star } from 'lucide-react';
@@ -83,8 +84,14 @@ export default function LabReportModal() {
 
   const { report, pre, post } = computed;
   const session = s.session;
+  const check = checkSubmission({ plugin: s.plugin, trials: s.trials, studentValue: s.studentValue, conclusion: s.conclusion, startedAt: s.startedAt, preAnswers: s.preAnswers, ctx: s.solveContext() });
+  const preSkipped = s.plugin.preQuiz.length > 0 && s.preAnswers.every((a) => a < 0);
 
   const submit = (): void => {
+    if (check.blockers.length) {
+      s.toast('warning', check.blockers[0]);
+      return;
+    }
     void submitGuard.run(async () => {
       const uid = `${session?.classCode ?? 'TUDO'}-${session?.studentCode ?? 'KHACH'}-${s.plugin.id}-${s.startedAt}`;
       const rec: SubmissionRecord = {
@@ -155,7 +162,7 @@ export default function LabReportModal() {
             <Printer size={16} /> In / Lưu PDF
           </button>
           {!done && (
-            <button className="btn-primary" onClick={submit} disabled={likert.some((x) => x === 0)} title={likert.some((x) => x === 0) ? 'Hãy đánh giá đủ 5 câu khảo sát' : ''}>
+            <button className="btn-primary" onClick={submit} disabled={likert.some((x) => x === 0) || check.blockers.length > 0} title={check.blockers[0] ?? (likert.some((x) => x === 0) ? 'Hãy đánh giá đủ 5 câu khảo sát' : '')}>
               <Send size={16} /> Xác nhận nộp bài
             </button>
           )}
@@ -217,8 +224,9 @@ export default function LabReportModal() {
             </tbody>
           </table>
           <p className="mt-1 text-sm">
-            Trắc nghiệm trước: <b>{pre.score}/{pre.max}</b> → sau: <b>{post.score}/{post.max}</b>
-            {post.score > pre.score ? ' 📈 Tiến bộ!' : ''}
+            Trắc nghiệm trước: <b>{preSkipped ? 'Chưa làm (bỏ qua)' : `${pre.score}/${pre.max}`}</b> → sau: <b>{post.score}/{post.max}</b>
+            {!preSkipped && post.score > pre.score ? ' 📈 Tiến bộ!' : ''}
+            {preSkipped && <span className="block text-xs">Không so sánh tiến bộ vì chưa làm câu hỏi trước thí nghiệm.</span>}
           </p>
           {post.misconceptions.length > 0 && (
             <div className="mt-1 rounded border border-amber-400 bg-amber-50 p-2 text-xs">

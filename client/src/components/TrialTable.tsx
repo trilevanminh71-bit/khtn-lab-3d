@@ -112,7 +112,8 @@ export function ManualRowForm() {
   const params = useLabStore((s) => s.params);
   const [open, setOpen] = useState(false);
   // Bài chỉ nhận số liệu từ thao tác đo thật (ví dụ chuẩn độ) → không cho nhập tay
-  if (plugin.validity?.noManualRows) return null;
+  const khkt = useLabStore((s) => s.khktMode);
+  if (plugin.validity?.noManualRows || !khkt) return null;
   const [text, setText] = useState<Record<string, string>>({});
   const fields = plugin.measurements.filter((m) => matchShowIf(m.showIf, params));
   const values = Object.fromEntries(fields.map((m) => [m.key, parseViNumber(text[m.key] ?? '')]));

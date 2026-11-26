@@ -1,6 +1,6 @@
 /**
  * components/SimControls.tsx — Điều khiển mô phỏng dưới cảnh 3D.
- * Luôn hiện: Chạy/Dừng và Đặt lại. Mục "Thêm": Từng bước và góc nhìn chuẩn (toàn cảnh, chính diện, từ trên, bên cạnh, theo bước).
+ * Luôn hiện: Tạm dừng/Tiếp tục, Xem lại, Đặt lại, Về góc nhìn ban đầu. Mục "Thêm": Từng bước và góc nhìn chuẩn (toàn cảnh, chính diện, từ trên, bên cạnh, theo bước).
  */
 import { useState } from 'react';
 import { Focus, MoreHorizontal, Pause, Play, RotateCcw, StepForward } from 'lucide-react';
@@ -62,17 +62,21 @@ export function SimControls() {
         </div>
       )}
       <div className="panel flex items-center gap-1 p-1" role="toolbar" aria-label="Điều khiển mô phỏng">
+        {paused ? (
+          <button className={`${BTN} border-lab-400`} onClick={run} title="Cho hoạt cảnh chạy tiếp">
+            <Play size={14} /> Tiếp tục
+          </button>
+        ) : (
+          <button className={BTN} onClick={() => st().simPause()} disabled={!hasRun} title={hasRun ? 'Dừng hình để quan sát kĩ' : 'Đo một lần rồi mới tạm dừng được'}>
+            <Pause size={14} /> Tạm dừng
+          </button>
+        )}
         {hasRun && !paused && (
-          <button className={BTN} onClick={() => st().simPause()}>
-            <Pause size={14} /> Dừng
+          <button className={BTN} onClick={run} title="Xem lại lần đo vừa rồi">
+            <Play size={14} /> Xem lại
           </button>
         )}
-        {(paused || hasRun) && (
-          <button className={BTN} onClick={run}>
-            <Play size={14} /> {paused ? 'Chạy tiếp' : 'Chạy lại'}
-          </button>
-        )}
-        <button className={BTN} onClick={() => st().simReset()} title="Đưa dụng cụ và đồng hồ về ban đầu, giữ số liệu đã ghi">
+        <button className={BTN} onClick={() => st().simReset()} title="Đưa dụng cụ và đồng hồ về ban đầu, số liệu đã ghi vẫn giữ">
           <RotateCcw size={14} /> Đặt lại
         </button>
         <button className={BTN} onClick={() => st().resetCamera()} aria-label="Về góc nhìn ban đầu" title="Về góc nhìn ban đầu">

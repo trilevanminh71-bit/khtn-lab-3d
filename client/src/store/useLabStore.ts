@@ -125,6 +125,9 @@ export interface LabState {
   pendingTrial: TrialRecord | null;
   /** Số lần đã đo (kể cả lần chưa ghi) — dùng làm mầm nhiễu đo */
   measureSeq: number;
+  /** Thời điểm (ms) hoạt cảnh đo kết thúc → lúc đó mới hiện số đo, cho khớp với đồng hồ trong cảnh */
+  pendingReadyAt: number;
+  pausedAt: number;
 
   settings: AppSettings;
   splitScreen: boolean;
@@ -259,6 +262,8 @@ function freshLabState(plugin: LabPluginDef, session: StudentSession | null) {
     submitted: false,
     pendingTrial: null as TrialRecord | null,
     measureSeq: 0,
+    pendingReadyAt: 0,
+    pausedAt: 0,
     simPaused: false,
     lastMeasureVisual: null as SceneVisualState | null
   };
@@ -456,14 +461,16 @@ export const useLabStore = create<LabState>((set, get) => ({
     soundEngine.play(st.plugin.subject === 'chemistry' ? 'bubble' : 'tick');
     vibrate('tap');
     logAction('measure', JSON.stringify(result.values));
-    set({ pendingTrial: trial, measureSeq: st.measureSeq + 1, visual: result.visual, visualNonce: st.visualNonce + 1, completedSteps: completed, simPaused: false, lastMeasureVisual: result.visual });
+    const animMs = typeof result.visual.animMs === 'number' ? result.visual.animMs : 0;
+    set({ pendingReadyAt: Date.now() + animMs * 1.15, pendingTrial: trial, measureSeq: st.measureSeq + 1, visual: result.visual, visualNonce: st.visualNonce + 1, completedSteps: completed, simPaused: false, lastMeasureVisual: result.visual });
     const describe = Object.entries(result.values)
       .map(([k, v]) => {
         const m = st.plugin.measurements.find((x) => x.key === k);
         return `${m?.label ?? k}: ${m?.valueLabels?.[String(v)] ?? `${String(v).replace('.', ',')}${m?.unit ? ` ${m.unit}` : ''}`}`;
       })
       .join('; ');
-    return { ok: true, message: Object.keys(result.values).length > 2 ? 'Đã đo xong. Bấm "Ghi vào bảng".' : `${describe}. Bấm "Ghi vào bảng".` };
+    if (animMs > 0) return { ok: true, message: 'Đang đo… nhìn dụng cụ và đồng hồ nhé!' };
+    return { ok: true, message: Object.keys(result.values).length > 2 ? 'Đo xong rồi! Bấm "Ghi vào bảng".' : `${describe}. Bấm "Ghi vào bảng".` };
   },
   commitPending() {
     const st = get();
@@ -565,15 +572,15 @@ export const useLabStore = create<LabState>((set, get) => ({
   simRun() {
     const st = get();
     if (st.simPaused) {
-      set({ simPaused: false });
-      return { ok: true, message: 'Tiếp tục hoạt cảnh.' };
+      set({ simPaused: false, pendingReadyAt: st.pendingReadyAt + (st.pausedAt ? Date.now() - st.pausedAt : 0), pausedAt: 0 });
+      return { ok: true, message: 'Chạy tiếp.' };
     }
-    if (!st.lastMeasureVisual) return { ok: false, message: 'Chưa có lần đo nào. Hãy bấm Đo trước.' };
+    if (!st.lastMeasureVisual) return { ok: false, message: 'Chưa đo lần nào. Hãy làm theo bước trên bảng bên phải trước.' };
     set({ visual: st.lastMeasureVisual, visualNonce: st.visualNonce + 1 });
     return { ok: true, message: 'Phát lại lần đo gần nhất.' };
   },
-  simPause: () => set({ simPaused: true }),
-  simStep: () => set({ simPaused: true, simStepNonce: get().simStepNonce + 1 }),
+  simPause: () => set({ simPaused: true, pausedAt: get().pausedAt || Date.now() }),
+  simStep: () => set({ simPaused: true, pausedAt: get().pausedAt || Date.now(), simStepNonce: get().simStepNonce + 1 }),
   simReset() {
     const st = get();
     let visual = st.visual;

@@ -54,10 +54,18 @@ export const vis = { num, str, bool };
 
 /** Vật liệu dùng chung (giảm số lượng shader biên dịch) */
 export function mat(color: string, opts: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1, ...opts });
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.12, ...opts });
+}
+/** Kim loại xước mờ (nhôm, inox) cho khung, giá đỡ, trụ thép */
+export function metalMat(color = '#cbd5e1', roughness = 0.32): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.9 });
+}
+/** Nhựa ABS bóng nhẹ cho vỏ thiết bị đo */
+export function plasticMat(color: string): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({ color, roughness: 0.38, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.3 });
 }
 export function glassMat(): THREE.MeshPhysicalMaterial {
-  return new THREE.MeshPhysicalMaterial({ color: '#e0f2fe', transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
+  return new THREE.MeshPhysicalMaterial({ color: '#e0f2fe', transparent: true, opacity: 0.3, roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, ior: 1.5, side: THREE.DoubleSide, depthWrite: false });
 }
 
 export function box(w: number, h: number, d: number, m: THREE.Material): THREE.Mesh {
@@ -103,21 +111,27 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 export function makeLabel(text: string, opts: { color?: string; bg?: string; size?: number } = {}): THREE.Sprite {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-  const font = `600 ${opts.size ?? 40}px "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif`;
+  const S = 2; // vẽ gấp đôi cho chữ sắc nét trên màn hình mật độ cao
+  const font = `600 ${(opts.size ?? 40) * S}px "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif`;
   ctx.font = font;
-  const w = Math.ceil(ctx.measureText(text).width) + 32;
-  canvas.width = w;
-  canvas.height = 64;
-  ctx.font = font;
-  ctx.fillStyle = opts.bg ?? 'rgba(15,23,42,0.82)';
-  roundRectPath(ctx, 0, 0, w, 64, 14);
+  const w = Math.ceil(ctx.measureText(text).width / S) + 32;
+  canvas.width = w * S;
+  canvas.height = 64 * S;
+  ctx.scale(S, S);
+  ctx.font = font.replace(`${(opts.size ?? 40) * S}px`, `${opts.size ?? 40}px`);
+  ctx.fillStyle = opts.bg ?? 'rgba(15,23,42,0.88)';
+  roundRectPath(ctx, 1, 1, w - 2, 62, 14);
   ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
   ctx.fillStyle = opts.color ?? '#f8fafc';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 16, 34);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  tex.anisotropy = 4;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false }));
   sprite.scale.set((w / 64) * 0.12, 0.12, 1);
   sprite.renderOrder = 10;
   sprite.userData.labelText = text;
@@ -139,23 +153,37 @@ export function setLabelText(sprite: THREE.Sprite, text: string, opts: { color?:
 /** Màn hình hiển thị số (đồng hồ hiện số, đồng hồ đo điện) */
 export function makeDisplay(width: number, height: number): { mesh: THREE.Mesh; set(text: string, color?: string): void } {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 96;
+  canvas.width = 512;
+  canvas.height = 192;
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: tex }));
+  tex.anisotropy = 4;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
   let last = '';
   const set = (text: string, color = '#22d3ee'): void => {
     if (text === last) return;
     last = text;
-    ctx.fillStyle = '#0b1220';
-    ctx.fillRect(0, 0, 256, 96);
-    ctx.fillStyle = color;
-    ctx.font = 'bold 44px Consolas, "Courier New", monospace';
+    // Nền LCD tối có ánh xanh, viền trong
+    const g = ctx.createLinearGradient(0, 0, 0, 192);
+    g.addColorStop(0, '#0d1b24');
+    g.addColorStop(1, '#05090d');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 512, 192);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, 506, 186);
+    ctx.font = 'bold 92px Consolas, "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 128, 50);
+    // Đoạn số mờ "8" phía sau như LCD 7 đoạn thật
+    ctx.fillStyle = 'rgba(148,163,184,0.08)';
+    ctx.fillText(text.replace(/[0-9]/g, '8'), 256, 100);
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = color;
+    ctx.fillText(text, 256, 100);
+    ctx.shadowBlur = 0;
     tex.needsUpdate = true;
   };
   set('0.000');
@@ -165,16 +193,28 @@ export function makeDisplay(width: number, height: number): { mesh: THREE.Mesh; 
 /** Bàn thí nghiệm + sàn (dùng chung mọi cảnh) */
 export function makeBench(width = 4, depth = 2.2): THREE.Group {
   const g = new THREE.Group();
-  const top = box(width, 0.08, depth, mat('#e2e8f0', { roughness: 0.8 }));
+  const top = box(width, 0.08, depth, new THREE.MeshPhysicalMaterial({ color: '#e5e9ee', roughness: 0.55, clearcoat: 0.35, clearcoatRoughness: 0.4 }));
   top.position.y = -0.04;
   g.add(top);
-  const legM = mat('#475569');
+  // Nẹp viền nhôm quanh mặt bàn
+  const trim = metalMat('#94a3b8', 0.35);
+  for (const z of [-1, 1]) {
+    const t = box(width + 0.02, 0.1, 0.02, trim);
+    t.position.set(0, -0.04, (z * (depth + 0.02)) / 2);
+    g.add(t);
+  }
+  for (const x of [-1, 1]) {
+    const t = box(0.02, 0.1, depth + 0.02, trim);
+    t.position.set((x * (width + 0.02)) / 2, -0.04, 0);
+    g.add(t);
+  }
+  const legM = metalMat('#64748b', 0.4);
   for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const leg = box(0.08, 0.9, 0.08, legM);
     leg.position.set((x * width) / 2.15, -0.5, (z * depth) / 2.3);
     g.add(leg);
   }
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), mat('#1e293b', { roughness: 1 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), mat('#1e293b', { roughness: 0.85, metalness: 0 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.95;
   floor.receiveShadow = true;

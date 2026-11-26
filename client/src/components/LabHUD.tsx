@@ -22,6 +22,7 @@ import { ManualRowForm, TrialTable } from './TrialTable';
 import { getSolver } from '../engines/solverRegistry';
 import { parseViNumber } from '../services/appServices';
 import { ChartGrid } from './DataChart';
+import type { TrialRecord } from '../types/lab';
 import type { QuizQuestion } from '../types/lab';
 
 const measureGuard = createGuard(700);
@@ -156,6 +157,26 @@ function More({ title, open, children }: { title: string; open?: boolean; childr
   );
 }
 
+const MODEL_NOTE = {
+  physics: 'Mô phỏng đã làm đơn giản: bỏ qua sức cản không khí, ma sát nhỏ và độ rung của giá đỡ; số đo có thêm sai số ngẫu nhiên nhỏ giống khi đo thật.',
+  chemistry: 'Mô phỏng đã làm đơn giản: coi dung dịch luôn khuấy đều, bỏ qua nhiệt toả ra ngoài và hao hụt khi rót; số đo có sai số ngẫu nhiên nhỏ.',
+  biology: 'Mô phỏng đã làm đơn giản: tế bào và mẫu vật được vẽ theo mô hình; kết quả mang tính minh hoạ và có dao động ngẫu nhiên nhỏ như mẫu thật.'
+} as const;
+
+/** Biểu đồ nhỏ ngay dưới số đo: điểm mới hiện lên khi vật vừa qua cổng / kết thúc lần đo */
+function LiveChart({ pending }: { pending: TrialRecord }) {
+  const plugin = useLabStore((s) => s.plugin);
+  const trials = useLabStore((s) => s.trials);
+  const all = useMemo(() => [...trials, { ...pending, index: trials.length + 1 }], [trials, pending]);
+  if (!plugin.charts?.length) return null;
+  return (
+    <div className="mt-1.5 rounded-lg bg-slate-950/60 p-1" aria-label="Biểu đồ cập nhật theo lần đo vừa xong">
+      <p className="px-1 text-[11px] text-slate-400">Điểm cuối cùng là lần vừa đo (chưa ghi vào bảng)</p>
+      <ChartGrid plugin={plugin} trials={all} limit={1} />
+    </div>
+  );
+}
+
 /** Đối chiếu sau khi nộp: giá trị em nhập – từ số liệu – lí thuyết – sai số tỉ đối */
 function ResultCompare() {
   const plugin = useLabStore((s) => s.plugin);
@@ -212,6 +233,16 @@ export function LabHUD() {
   const modal = useLabStore((s) => s.modal);
   const submitted = useLabStore((s) => s.submitted);
   const pending = useLabStore((s) => s.pendingTrial);
+  const readyAt = useLabStore((s) => s.pendingReadyAt);
+  const paused = useLabStore((s) => s.simPaused);
+  const [now, setNow] = useState(() => Date.now());
+  // Chờ hoạt cảnh tới cổng/kết thúc rồi mới hiện số đo (khớp đồng hồ trong cảnh)
+  useEffect(() => {
+    if (!pending || paused || Date.now() >= readyAt) return;
+    const id = setTimeout(() => setNow(Date.now()), readyAt - Date.now() + 30);
+    return () => clearTimeout(id);
+  }, [pending, readyAt, paused, now]);
+  const pendingReady = !!pending && !paused && Math.max(now, Date.now()) >= readyAt;
   const params = useLabStore((s) => s.params);
   const [tab, setTab] = useState<Tab>('steps');
   const [quizOpen, setQuizOpen] = useState(false);
@@ -306,17 +337,17 @@ export function LabHUD() {
     : !session
       ? { label: 'Nhập tên và lớp để bắt đầu', run: () => st().openModal('session'), icon: UserRound }
     : pending
-      ? { label: 'Ghi vào bảng', run: doCommit, icon: TableProperties }
+      ? { label: pendingReady ? 'Ghi vào bảng' : paused ? 'Đang tạm dừng…' : 'Đang đo…', run: doCommit, icon: TableProperties }
     : !currentStep
-      ? { label: 'Nhập kết quả', run: () => setTab('result'), icon: CheckCircle2 }
+      ? { label: 'Ghi kết quả của em', run: () => setTab('result'), icon: CheckCircle2 }
       : currentStep.action === 'measure'
         ? { label: measureLabel, run: doMeasure, icon: Ruler }
         : currentStep.action === 'record'
           ? need > 0
             ? { label: `${measureLabel} tiếp (còn ${need} lần)`, run: doMeasure, icon: Ruler }
-            : { label: 'Đã đo đủ, tiếp tục', run: doStep, icon: CheckCircle2 }
+            : { label: 'Đủ số lần đo – sang bước sau', run: doStep, icon: CheckCircle2 }
           : currentStep.action === 'adjust'
-            ? { label: 'Chọn xong, tiếp tục', run: doStep, icon: CheckCircle2 }
+            ? { label: 'Chỉnh xong – sang bước sau', run: doStep, icon: CheckCircle2 }
             : { label: 'Làm bước này', run: doStep, icon: Play };
   const PrimaryIcon = primary.icon;
   const tuning = !currentStep || ['adjust', 'measure', 'record'].includes(currentStep.action);
@@ -338,8 +369,8 @@ export function LabHUD() {
         <div className="grid grid-cols-3 gap-1" role="tablist">
           {(
             [
-              ['steps', 'Thí nghiệm', ClipboardCheck],
-              ['data', `Số liệu (${trials.length})`, FileText],
+              ['steps', 'Làm thí nghiệm', ClipboardCheck],
+              ['data', `Bảng số liệu (${trials.length})`, FileText],
               ['result', 'Kết quả', CheckCircle2]
             ] as const
           ).map(([k, label, Icon]) => (
@@ -371,37 +402,39 @@ export function LabHUD() {
             {/* Bước hiện tại: một thẻ, một nút chính */}
             <section className="rounded-xl border-2 border-lab-500 bg-lab-900/40 p-3" aria-label="Bước hiện tại">
               <div className="flex items-center gap-2 text-xs text-slate-300">
-                <b className="text-lab-400">{currentStep ? `Bước ${stepIdx + 1}/${plugin.steps.length}` : 'Đã xong các bước'}</b>
+                <b className="text-lab-400">{currentStep ? `Bước ${stepIdx + 1}/${plugin.steps.length}` : 'Xong hết các bước rồi!'}</b>
                 <span className="h-1.5 flex-1 overflow-hidden rounded bg-slate-700" role="progressbar" aria-valuemin={0} aria-valuemax={plugin.steps.length} aria-valuenow={stepIdx} aria-label="Tiến độ">
                   <span className="block h-full bg-lab-500" style={{ width: `${(stepIdx / Math.max(1, plugin.steps.length)) * 100}%` }} />
                 </span>
               </div>
-              <h2 className="mt-1 text-base font-bold leading-snug">{currentStep ? currentStep.title : 'Tính và nhập kết quả'}</h2>
-              <p className="mt-0.5 text-sm text-slate-200">{currentStep ? currentStep.instruction : 'Mở phần Kết quả, nhập số em tính được và viết kết luận.'}</p>
-              {missingPpe.length > 0 && <p className="mt-1.5 rounded bg-amber-900/50 p-1.5 text-sm text-amber-100" role="status">⚠ Bật đủ bảo hộ ở thanh phía trên trước khi làm.</p>}
+              <h2 className="mt-1 text-base font-bold leading-snug">{currentStep ? currentStep.title : 'Tính và ghi kết quả'}</h2>
+              <p className="mt-0.5 text-sm text-slate-200">{currentStep ? currentStep.instruction : 'Mở thẻ Kết quả, ghi con số em tính được và vài câu nhận xét.'}</p>
+              {missingPpe.length > 0 && <p className="mt-1.5 rounded bg-amber-900/50 p-1.5 text-sm text-amber-100" role="status">⚠ Đeo đủ đồ bảo hộ (thanh phía trên) rồi mới làm nhé.</p>}
               {tuning && currentStep?.action === 'adjust' && (
                 <div className="mt-2 space-y-2">
                   {plugin.tools?.includes('mc964') && <Mc964Console />}
                   <ParamControls />
                 </div>
               )}
-              {!session && <p className="mt-1.5 rounded bg-sky-900/40 p-1.5 text-sm text-sky-100">Em cần nhập họ tên, mã học sinh và mã lớp trước khi làm thí nghiệm.</p>}
-              {pending && session && (
+              {!session && <p className="mt-1.5 rounded bg-sky-900/40 p-1.5 text-sm text-sky-100">Ghi tên, mã học sinh và lớp của em trước đã nhé.</p>}
+              {pending && session && !pendingReady && <p className="mt-1.5 animate-pulse rounded bg-slate-800 p-1.5 text-sm text-slate-200" role="status">⏱ Đang đo – nhìn vật chuyển động và đồng hồ trong khung 3D…</p>}
+              {pending && session && pendingReady && (
                 <p className="mt-1.5 rounded bg-slate-800 p-1.5 font-mono text-sm text-amber-200" role="status">
-                  Vừa đo: {Object.entries(pending.values).map(([k, v]) => { const m = plugin.measurements.find((x) => x.key === k); return `${m?.label ?? k} = ${m?.valueLabels?.[String(v)] ?? fmtVi(v, m?.decimals ?? 3)}${m?.unit ? ` ${m.unit}` : ''}`; }).join('; ')}
+                  Số đo vừa có: {Object.entries(pending.values).map(([k, v]) => { const m = plugin.measurements.find((x) => x.key === k); return `${m?.label ?? k} = ${m?.valueLabels?.[String(v)] ?? fmtVi(v, m?.decimals ?? 3)}${m?.unit ? ` ${m.unit}` : ''}`; }).join('; ')}
                 </p>
               )}
-              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={missingPpe.length > 0 && !submitted && !!session}>
+              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={(missingPpe.length > 0 && !submitted && !!session) || (!!pending && !pendingReady && !!session)}>
                 <PrimaryIcon size={19} /> {primary.label}
               </button>
+              {pending && session && pendingReady && <LiveChart pending={pending} />}
               {pending && session && (
                 <button className="btn-ghost mt-1 w-full text-xs" onClick={() => st().discardPending()} title="Lần đo bất thường — không ghi vào bảng">
-                  Bỏ lần đo này
+                  Bỏ lần này (đo lỗi)
                 </button>
               )}
               {!pending && session && measured && !submitted && (!currentStep || (currentStep.action === 'record' && need === 0)) && (
                 <button className="btn mt-1.5 w-full" onClick={doMeasure}>
-                  <Ruler size={16} /> Đo thêm
+                  <Ruler size={16} /> Đo thêm lần nữa
                 </button>
               )}
               {!pending && session && !submitted && currentStep && ['measure', 'record'].includes(currentStep.action) && missingPpe.length === 0 && (
@@ -422,7 +455,7 @@ export function LabHUD() {
                 <ParamControls />
               </section>
             )}
-            <More title="Kiến thức" open={conceptual}>
+            <More title="Vì sao lại thế? (công thức, giải thích)" open={conceptual}>
               <InsightPanel />
               <div className="space-y-1 text-sm text-slate-300">
                 <p className="font-semibold text-slate-100">{plugin.title}</p>
@@ -434,6 +467,9 @@ export function LabHUD() {
                 </ul>
                 <p>{plugin.theory}</p>
                 {plugin.equation && <p className="rounded bg-slate-950 p-1 text-center font-mono text-amber-200">{plugin.equation}</p>}
+                <p className="rounded border border-slate-700 p-1.5 text-xs text-slate-400">
+                  <b>Lưu ý về mô phỏng:</b> {MODEL_NOTE[plugin.subject]}
+                </p>
               </div>
             </More>
             {plugin.tools?.includes('oxidation') && (
@@ -441,7 +477,7 @@ export function LabHUD() {
                 <OxidationTool />
               </More>
             )}
-            <More title="Xem tất cả các bước">
+            <More title="Xem cả quy trình">
               <ol className="space-y-1">
                 {plugin.steps.map((s, i) => {
                   const done = completed.includes(s.id);
@@ -456,7 +492,7 @@ export function LabHUD() {
                 })}
               </ol>
             </More>
-            <More title="Tùy chọn khác">
+            <More title="Thêm lựa chọn">
               <div className="grid gap-1.5">
                 {!tuning && (
                   <div className="space-y-2">
@@ -475,14 +511,14 @@ export function LabHUD() {
                 <button className="btn" onClick={doReset}>
                   <RotateCcw size={15} /> Làm lại từ đầu
                 </button>
-                <p className="text-xs text-slate-400">{savedAt ? `Đã lưu lúc ${new Date(savedAt).toLocaleTimeString('vi-VN')}` : 'Bài tự lưu mỗi 5 giây.'}</p>
+                <p className="text-xs text-slate-400">{savedAt ? `Đã tự lưu lúc ${new Date(savedAt).toLocaleTimeString('vi-VN')}` : 'Bài được tự lưu, không lo mất.'}</p>
               </div>
             </More>
           </>
         ) : tab === 'data' ? (
           trials.length === 0 ? (
             <div className="space-y-2 text-sm text-slate-300">
-              <p className="text-center">Chưa có số liệu. Hãy làm thí nghiệm, đo rồi bấm Ghi vào bảng.</p>
+              <p className="text-center">Bảng còn trống. Đo xong, bấm “Ghi vào bảng” là số liệu hiện ở đây.</p>
               <TrialTable plugin={plugin} trials={trials} example={params} />
               <button className="btn-primary min-h-[46px] w-full" onClick={() => setTab('steps')}>
                 Đi tới thí nghiệm
@@ -491,11 +527,13 @@ export function LabHUD() {
             </div>
           ) : (
             <>
-              <p className={`text-sm font-semibold ${need > 0 ? 'text-warn' : 'text-ok'}`}>{need > 0 ? `Đã đo ${trials.length} lần, cần thêm ${need} lần.` : `✓ Đã đo đủ ${trials.length} lần.`}</p>
+              <p className={`text-sm font-semibold ${need > 0 ? 'text-warn' : 'text-ok'}`}>{need > 0 ? `Đã có ${trials.length} lần đo, cần thêm ${need} lần nữa.` : `✓ Đủ rồi: ${trials.length} lần đo.`}</p>
               <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} />
               <ManualRowForm />
-              <SummaryPanel />
               <ChartGrid plugin={plugin} trials={trials} limit={1} />
+              <More title="Cách tính chi tiết (công thức, sai số)">
+                <SummaryPanel />
+              </More>
               <More title="Biểu đồ khác">
                 <ChartGrid plugin={plugin} trials={trials} skip={1} empty="Bài này chỉ có một biểu đồ." />
               </More>
@@ -508,7 +546,7 @@ export function LabHUD() {
                         {m.label}: trung bình <b className="font-mono">{fmtVi(mu, m.decimals + 1)}</b> {m.unit}, sai số <span className="font-mono">{fmtVi(err, m.decimals + 1)}</span> ({n} lần)
                       </div>
                     ))}
-                  <p className="text-xs text-slate-400">Tính trên mọi lần đo, kể cả khi thông số khác nhau.</p>
+                  <p className="text-xs text-slate-400">Tính chung mọi lần đo, kể cả khi em đã đổi thông số.</p>
                 </div>
               </More>
               <button className="btn min-h-[44px] w-full" onClick={() => st().openModal('worksheet')}>
@@ -528,7 +566,7 @@ export function LabHUD() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-semibold" htmlFor="conclusion">
-                Kết luận của em
+                Em rút ra được gì?
               </label>
               <textarea id="conclusion" className="input min-h-[90px]" value={conclusion} onChange={(e) => st().setConclusion(e.target.value)} placeholder={plugin.conclusionPrompt} disabled={submitted} />
             </div>
@@ -536,7 +574,7 @@ export function LabHUD() {
               <FileText size={18} /> {submitted ? 'Xem phiếu báo cáo' : 'Nộp bài'}
             </button>
             {submitted && <ResultCompare />}
-            <More title="Công cụ hỗ trợ">
+            <More title="Cần trợ giúp?">
               <div className="grid gap-1.5">
                 <button className="btn" onClick={() => st().setToolsOpen(true)}>
                   <Calculator size={15} /> Máy tính và sổ tay

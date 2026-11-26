@@ -27,8 +27,8 @@ export function PrincipleBox() {
       <p className="flex gap-1.5">
         <Lightbulb size={14} className="mt-0.5 shrink-0" />
         <span>
-          Thử thay đổi một đại lượng mỗi lần, ghi số liệu và rút ra kết luận.
-          {many && <b> Em vừa đổi {changed.length} đại lượng: {changed.join(', ')}.</b>}
+          Mẹo: mỗi lần chỉ đổi <b>một</b> thứ, giữ nguyên các thứ khác – như vậy mới biết cái gì làm kết quả thay đổi.
+          {many && <b> Em vừa đổi cùng lúc {changed.length} thứ: {changed.join(', ')}.</b>}
         </span>
       </p>
     </div>
@@ -213,7 +213,7 @@ export function SummaryPanel() {
   return (
     <section className="rounded-lg border border-slate-700 bg-slate-800/60 p-2 text-xs" aria-label="Xử lí số liệu tự động">
       <h3 className="mb-1 flex items-center gap-1 font-bold text-lab-400">
-        <Sigma size={13} /> Xử lí số liệu tự động
+        <Sigma size={13} /> Máy tính sẵn giúp em
       </h3>
       <dl className="space-y-1">
         {lines.map((l) => (

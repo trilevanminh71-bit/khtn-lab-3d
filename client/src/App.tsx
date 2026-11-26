@@ -13,6 +13,7 @@ import { TutorErrorBoundary } from './components/TutorErrorBoundary';
 import { SafetyPpeBar } from './components/SafetyPpeBar';
 import { FloatingLabTools } from './components/FloatingLabTools';
 import { SimControls } from './components/SimControls';
+import { SceneDock } from './components/SceneDock';
 import { ConfirmDialogModal } from './components/ConfirmDialogModal';
 import { PinGuardModal } from './components/PinGuardModal';
 import { OnboardingTour } from './components/OnboardingTour';
@@ -178,6 +179,7 @@ export default function App() {
             </div>
           )}
           {khkt && <KhktDemoOverlay />}
+          {incidents.length === 0 && <SceneDock />}
           <SimControls />
           <FloatingLabTools />
         </section>

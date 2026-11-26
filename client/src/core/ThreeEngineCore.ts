@@ -11,6 +11,7 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { PerfStats } from '../types/lab';
 import type { SceneHandle, SlideSpec, SnapPoint } from '../engines/sceneKit';
 
@@ -57,6 +58,8 @@ export class ThreeEngineCore {
   private debug = false;
   private axes: THREE.AxesHelper | null = null;
   private quality: number;
+  /** Bản đồ môi trường (phản chiếu) dùng chung cho mọi cảnh — tạo 1 lần */
+  private envMap: THREE.Texture | null = null;
   private frames = 0;
   private fpsTimer = 0;
   private lowStreak = 0;
@@ -88,6 +91,21 @@ export class ThreeEngineCore {
     this.renderer.shadowMap.enabled = this.quality >= 2;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Tone mapping ACES: vùng sáng không bị cháy, kim loại / nhựa trông thật hơn
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    if (this.quality >= 1) {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const room = new RoomEnvironment();
+      this.envMap = pmrem.fromScene(room, 0.04).texture;
+      room.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+      pmrem.dispose();
+    }
     this.renderer.setClearColor(this.bg());
     this.renderer.domElement.style.touchAction = 'none';
     this.renderer.domElement.setAttribute('aria-label', 'Không gian thí nghiệm 3D');
@@ -121,11 +139,19 @@ export class ThreeEngineCore {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(this.bg());
     scene.fog = new THREE.Fog(scene.background as THREE.Color, 8, 18);
-    scene.add(new THREE.HemisphereLight('#e0f2fe', '#1e293b', 1.1));
-    const sun = new THREE.DirectionalLight('#ffffff', 1.6);
+    scene.environment = this.envMap;
+    scene.environmentIntensity = 0.55;
+    scene.add(new THREE.HemisphereLight('#e0f2fe', '#1e293b', this.envMap ? 0.7 : 1.1));
+    // Đèn viền phía sau: tách rõ mép dụng cụ khỏi nền tối
+    const rim = new THREE.DirectionalLight('#bae6fd', 0.6);
+    rim.position.set(-3, 2.5, -3);
+    scene.add(rim);
+    const sun = new THREE.DirectionalLight('#fff7ed', 1.7);
     sun.position.set(2.5, 4, 2.5);
     sun.castShadow = this.quality >= 2;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
     sun.shadow.camera.left = -3;
     sun.shadow.camera.right = 3;
     sun.shadow.camera.top = 3;
@@ -573,6 +599,7 @@ export class ThreeEngineCore {
     this.axes?.dispose();
     this.main = null;
     this.compare = null;
+    this.envMap?.dispose();
     this.renderer.renderLists.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();

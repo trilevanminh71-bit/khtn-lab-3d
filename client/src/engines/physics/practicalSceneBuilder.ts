@@ -8,9 +8,9 @@
  */
 import * as THREE from 'three';
 import type { SceneOptions, SceneVisualState } from '../../types/lab';
-import { Anim, box, cyl, disposeObject, makeBench, makeDisplay, makeLabel, makeSnapMarker, mat, setLabelText, sphere, tagObject, vis, type SceneHandle, type SlideSpec, type SnapPoint } from '../sceneKit';
+import { Anim, box, cyl, disposeObject, makeBench, makeDisplay, makeLabel, makeSnapMarker, mat, metalMat, plasticMat, setLabelText, sphere, tagObject, vis, type SceneHandle, type SlideSpec, type SnapPoint } from '../sceneKit';
 
-const metal = (): THREE.MeshStandardMaterial => mat('#94a3b8', { metalness: 0.7, roughness: 0.3 });
+const metal = (): THREE.MeshStandardMaterial => metalMat('#b6c2d1', 0.28);
 
 const BEAM_IDLE = '#7f1d1d';
 /** Tia cổng quang điện: bị chắn → chớp đỏ sáng */
@@ -55,16 +55,20 @@ function counting(value: number, final: string): string {
 /** Cổng quang điện dạng chữ U, tia sáng đỏ; trả về vật liệu tia để nháy khi bị chắn */
 function makeGate(color: string, name: string): { g: THREE.Group; beam: THREE.MeshBasicMaterial } {
   const g = new THREE.Group();
-  const m = mat(color);
+  const m = plasticMat(color);
   const a = box(0.035, 0.3, 0.035, m);
   a.position.set(0, 0.05, -0.15);
   const b = box(0.035, 0.3, 0.035, m);
   b.position.set(0, 0.05, 0.15);
   const top = box(0.035, 0.035, 0.335, m);
   top.position.set(0, 0.2, 0);
-  const beam = new THREE.MeshBasicMaterial({ color: BEAM_IDLE, transparent: true, opacity: 0.35 });
+  const beam = new THREE.MeshBasicMaterial({ color: BEAM_IDLE, transparent: true, opacity: 0.35, toneMapped: false });
   const ray = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.28, 6), beam);
   ray.rotation.x = Math.PI / 2;
+  // Đèn LED báo tín hiệu trên đỉnh cổng: sáng cùng lúc với tia bị chắn
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), beam);
+  led.position.set(0.02, 0.22, 0);
+  g.add(led);
   const label = makeLabel(name, { size: 34 });
   label.position.set(0, 0.32, 0);
   g.add(a, b, top, ray, label);
@@ -92,7 +96,7 @@ function makeRuler(len: number): THREE.Group {
 /** Đồng hồ đo thời gian hiện số MC964 với nhãn chế độ và nút RESET */
 function makeMc964(title: string): { g: THREE.Group; display: ReturnType<typeof makeDisplay>; mode: THREE.Sprite; reset: THREE.Object3D } {
   const g = new THREE.Group();
-  g.add(box(0.62, 0.3, 0.28, mat('#e5e7eb')));
+  g.add(box(0.62, 0.3, 0.28, plasticMat('#e8ebef')));
   const display = makeDisplay(0.36, 0.14);
   display.mesh.position.set(-0.08, 0.04, 0.142);
   const reset = cyl(0.03, 0.03, 0.03, mat('#dc2626'));
@@ -120,13 +124,13 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
   root.add(incline);
   const beam = box(len + 0.1, 0.05, 0.14, metal());
   beam.position.set(-len / 2, 0, 0);
-  const groove = box(len, 0.012, 0.045, mat('#475569'));
+  const groove = box(len, 0.012, 0.045, metalMat('#8b97a8', 0.3));
   groove.position.set(-len / 2, 0.03, 0);
   const ruler = makeRuler(len);
   ruler.position.set(-len / 2, 0.01, 0.1);
   incline.add(beam, groove, ruler);
-  const legHigh = box(0.05, 1, 0.1, mat('#334155'));
-  const legLow = box(0.05, 0.22, 0.1, mat('#334155'));
+  const legHigh = box(0.05, 1, 0.1, metalMat('#475569', 0.4));
+  const legLow = box(0.05, 0.22, 0.1, metalMat('#475569', 0.4));
   legLow.position.set(len / 2, 0.11, 0);
   root.add(legHigh, legLow);
 
@@ -138,7 +142,7 @@ export function buildMc964Scene(options: SceneOptions): SceneHandle {
   magLabel.position.set(-len - 0.06, 0.28, 0);
   incline.add(magLabel);
 
-  const ball = sphere(0.055, mat('#e5e7eb', { metalness: 0.9, roughness: 0.15 }), 20);
+  const ball = sphere(0.055, metalMat('#eef2f7', 0.08), 32);
   tagObject(ball, 'ball', String(options.objectLabel ?? 'Viên bi thép'));
   incline.add(ball);
 
@@ -256,7 +260,7 @@ export function buildFreeFall2Scene(): SceneHandle {
   const y = (cm: number): number => topY - (cm / 100) * H;
   const pole = box(0.07, 2.25, 0.07, metal());
   pole.position.set(0, 1.12, -0.25);
-  const base = box(0.6, 0.06, 0.6, mat('#334155'));
+  const base = box(0.6, 0.06, 0.6, metalMat('#334155', 0.45));
   base.position.set(0, 0.03, -0.1);
   root.add(pole, base);
   const ruler = makeRuler(H);
@@ -269,7 +273,7 @@ export function buildFreeFall2Scene(): SceneHandle {
   arm.position.set(0, topY + 0.2, -0.12);
   tagObject(magnet, 'release', 'Nam châm điện N');
   root.add(magnet, arm);
-  const body = cyl(0.035, 0.035, 0.12, mat('#cbd5e1', { metalness: 0.8, roughness: 0.25 }));
+  const body = cyl(0.035, 0.035, 0.12, metalMat('#d5dde7', 0.18), 32);
   tagObject(body, 'ball', 'Trụ thép');
   root.add(body);
   const E = makeGate('#1d4ed8', 'E');
@@ -476,7 +480,7 @@ export function buildAirtrackScene(): SceneHandle {
   const root = new THREE.Group();
   root.add(makeBench(4.4, 1.8));
   const trackY = 0.4;
-  const rail = box(3.6, 0.1, 0.2, mat('#0ea5e9', { metalness: 0.3 }));
+  const rail = box(3.6, 0.1, 0.2, metalMat('#7dd3fc', 0.3));
   rail.position.y = trackY;
   root.add(rail);
   for (const x of [-1.5, 1.5]) {
@@ -484,7 +488,7 @@ export function buildAirtrackScene(): SceneHandle {
     leg.position.set(x, trackY / 2, 0);
     root.add(leg);
   }
-  const pump = box(0.4, 0.28, 0.32, mat('#0369a1'));
+  const pump = box(0.4, 0.28, 0.32, plasticMat('#0369a1'));
   pump.position.set(-1.6, 0.14, 0.6);
   tagObject(pump, 'pump', 'Bơm nén khí');
   const launcher = box(0.12, 0.2, 0.22, mat('#dc2626'));

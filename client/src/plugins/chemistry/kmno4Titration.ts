@@ -8,7 +8,7 @@ import type { LabPluginDef } from '../../types/lab';
 
 export const kmno4TitrationPlugin: LabPluginDef = {
   id: 'hh10-chuan-do-permanganate',
-  version: 1,
+  version: 2,
   subject: 'chemistry',
   title: 'Chuẩn độ dung dịch iron(II) sulfate bằng potassium permanganate',
   shortTitle: 'Bài 15 – Chuẩn độ KMnO₄',
@@ -38,6 +38,15 @@ export const kmno4TitrationPlugin: LabPluginDef = {
   ],
   charts: [{ id: 'V', title: 'Số đọc burette theo lần chuẩn độ', kind: 'line', x: 'index', y: 'Vread', xLabel: 'Lần', yLabel: 'V (mL)' }],
   minTrials: 3,
+  validity: {
+    requireEq: { endpoint: 1 },
+    nonZero: ['Vread'],
+    fixedParams: ['acid'],
+    notReadyMessage: 'Chưa đạt điểm cuối chuẩn độ (dung dịch chưa hồng nhạt bền). Nhỏ thêm KMnO₄ từng giọt rồi đo lại.',
+    noManualRows: true,
+    requireValidToSubmit: true,
+    hideHintUntilSubmit: true
+  },
   result: { key: 'cFe', label: 'Nồng độ Fe²⁺ trong dung dịch FeSO₄', unit: 'mol/L', tolerancePercent: 2, decimals: 4, hint: 'Lấy trung bình V(KMnO₄) của các lần đạt điểm cuối: C(Fe²⁺) = 5·0,02·V̄/10,00.' },
   steps: [
     { id: 's1', title: 'Bảo hộ & kiểm tra nhãn', instruction: 'Đeo kính, găng tay; đọc nhãn potassium permanganate và sulfuric acid.', action: 'click', trigger: 'acid-bottle', requiresPpe: true },

@@ -227,6 +227,7 @@ export interface LabPluginDef {
   charts?: ChartDef[];
   tools?: LessonTool[];
   tables?: TableGroup[];
+  validity?: ValidityRule;
 }
 
 /** Bài No-Code: mỗi lần đo = biểu thức của tham số + thông số ẩn + nhiễu */
@@ -256,6 +257,28 @@ export interface TrialRecord {
   at: number;
   /** Hàng do học sinh tự nhập (đọc từ thiết bị thật) */
   manual?: boolean;
+  /** Học sinh đánh dấu "đo lỗi" → bị loại khỏi tính toán */
+  flagged?: boolean;
+  /** Thông số bị đổi giữa lúc đo và lúc ghi */
+  paramChanged?: boolean;
+}
+
+/** Quy tắc lần đo hợp lệ (JSON thuần) — lần không hợp lệ bị loại khỏi trung bình, chấm điểm */
+export interface ValidityRule {
+  /** Số đo phải bằng đúng giá trị (ví dụ { endpoint: 1 } = đạt điểm cuối) */
+  requireEq?: Record<string, number>;
+  /** Số đo phải khác 0 */
+  nonZero?: string[];
+  /** Thông số phải giữ nguyên giữa các lần đo hợp lệ (so với lần hợp lệ đầu tiên) */
+  fixedParams?: string[];
+  /** Thông báo khi lần đo chưa đạt (khóa nút Ghi vào bảng) */
+  notReadyMessage?: string;
+  /** Không cho nhập tay hàng số liệu */
+  noManualRows?: boolean;
+  /** Chỉ cho nộp bài khi đủ minTrials lần hợp lệ */
+  requireValidToSubmit?: boolean;
+  /** Ẩn gợi ý công thức ở tab Kết quả tới khi nộp bài */
+  hideHintUntilSubmit?: boolean;
 }
 
 /** Ngữ cảnh đưa vào solver */

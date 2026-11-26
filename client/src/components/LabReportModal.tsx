@@ -3,6 +3,7 @@
  *  1) Câu hỏi sau thí nghiệm (Post-Quiz) → 2) Chấm điểm chi tiết từng tiêu chí + GIẢI THÍCH LÍ DO TRỪ ĐIỂM
  *  → 3) Khảo sát Likert 5 sao → 4) Nộp: lưu IndexedDB, xếp hàng đồng bộ LAN, sinh MÃ QR < 180 ký tự để GV quét offline.
  */
+import { validTrials } from '../utils/trialTable';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Printer, Send, Star } from 'lucide-react';
@@ -53,13 +54,13 @@ export default function LabReportModal() {
     const trueValue = solver.trueResult(ctx);
     let dataEstimate = Number.NaN;
     try {
-      dataEstimate = solver.estimateFromTrials(s.trials, ctx);
+      dataEstimate = solver.estimateFromTrials(validTrials(s.plugin, s.trials), ctx);
     } catch {
       dataEstimate = Number.NaN;
     }
     const studentValue = parseViNumber(s.studentValue);
     const report = gradeSubmission(
-      { plugin: s.plugin, trials: s.trials, studentValue, trueValue, completedSteps: s.completedSteps, ppe: s.ppe, incidentCount: s.incidentCount, conclusion: s.conclusion, meniscusErrorMl: s.meniscusErrorMl },
+      { plugin: s.plugin, trials: validTrials(s.plugin, s.trials), studentValue, trueValue, completedSteps: s.completedSteps, ppe: s.ppe, incidentCount: s.incidentCount, conclusion: s.conclusion, meniscusErrorMl: s.meniscusErrorMl },
       dataEstimate
     );
     const pre = gradeQuiz(s.plugin.preQuiz, s.preAnswers);

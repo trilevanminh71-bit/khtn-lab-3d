@@ -23,6 +23,7 @@ import { getSolver } from '../engines/solverRegistry';
 import { parseViNumber } from '../services/appServices';
 import { ChartGrid } from './DataChart';
 import type { TrialRecord } from '../types/lab';
+import { validTrials, valueIssue } from '../utils/trialTable';
 import type { QuizQuestion } from '../types/lab';
 
 const measureGuard = createGuard(700);
@@ -190,7 +191,7 @@ function ResultCompare() {
     const ctx = last ? { ...base, params: last.params } : base;
     let est = Number.NaN;
     try {
-      est = solver.estimateFromTrials(trials, ctx);
+      est = solver.estimateFromTrials(validTrials(plugin, trials), ctx);
     } catch {
       est = Number.NaN;
     }
@@ -319,17 +320,20 @@ export function LabHUD() {
       }
     });
 
+  const valid = useMemo(() => validTrials(plugin, trials), [plugin, trials]);
   const stats = useMemo(
     () =>
       plugin.measurements.map((m) => {
-        const xs = trials.map((t) => t.values[m.key]).filter((x) => Number.isFinite(x));
+        const xs = valid.map((t) => t.values[m.key]).filter((x) => Number.isFinite(x));
         return { m, mean: mean(xs), err: absError(xs), n: xs.length };
       }),
-    [trials, plugin]
+    [valid, plugin]
   );
 
   const missingPpe = currentStep?.requiresPpe ? plugin.ppeRequired.filter((k) => !ppe[k]) : [];
-  const need = Math.max(0, plugin.minTrials - trials.length);
+  const need = Math.max(0, plugin.minTrials - (plugin.validity ? valid.length : trials.length));
+  const pendingIssue = pending ? valueIssue(plugin, pending.values) : null;
+  const submitBlocked = !submitted && !!plugin.validity?.requireValidToSubmit && valid.length < plugin.minTrials;
   /** Một hành động chính duy nhất cho bước hiện tại */
   const measureLabel = currentStep?.trigger === 'ball' ? 'Thả bi' : 'Đo';
   const primary: { label: string; run: () => void; icon: typeof Play } = submitted
@@ -337,7 +341,7 @@ export function LabHUD() {
     : !session
       ? { label: 'Nhập tên và lớp để bắt đầu', run: () => st().openModal('session'), icon: UserRound }
     : pending
-      ? { label: pendingReady ? 'Ghi vào bảng' : paused ? 'Đang tạm dừng…' : 'Đang đo…', run: doCommit, icon: TableProperties }
+      ? { label: !pendingReady ? (paused ? 'Đang tạm dừng…' : 'Đang đo…') : pendingIssue ? 'Chưa ghi được – đo lại' : 'Ghi vào bảng', run: doCommit, icon: TableProperties }
     : !currentStep
       ? { label: 'Ghi kết quả của em', run: () => setTab('result'), icon: CheckCircle2 }
       : currentStep.action === 'measure'
@@ -423,10 +427,15 @@ export function LabHUD() {
                   Số đo vừa có: {Object.entries(pending.values).map(([k, v]) => { const m = plugin.measurements.find((x) => x.key === k); return `${m?.label ?? k} = ${m?.valueLabels?.[String(v)] ?? fmtVi(v, m?.decimals ?? 3)}${m?.unit ? ` ${m.unit}` : ''}`; }).join('; ')}
                 </p>
               )}
-              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={(missingPpe.length > 0 && !submitted && !!session) || (!!pending && !pendingReady && !!session)}>
+              <button className="btn-primary mt-2.5 min-h-[50px] w-full text-base" onClick={primary.run} disabled={(missingPpe.length > 0 && !submitted && !!session) || (!!pending && !!session && (!pendingReady || !!pendingIssue))}>
                 <PrimaryIcon size={19} /> {primary.label}
               </button>
-              {pending && session && pendingReady && <LiveChart pending={pending} />}
+              {pending && session && pendingReady && pendingIssue && (
+                <p className="mt-1.5 rounded border border-amber-500/70 bg-amber-900/40 p-1.5 text-sm text-amber-100" role="alert">
+                  ⚠ {plugin.validity?.notReadyMessage ?? `Lần đo chưa đạt: ${pendingIssue}.`}
+                </p>
+              )}
+              {pending && session && pendingReady && !pendingIssue && <LiveChart pending={pending} />}
               {pending && session && (
                 <button className="btn-ghost mt-1 w-full text-xs" onClick={() => st().discardPending()} title="Lần đo bất thường — không ghi vào bảng">
                   Bỏ lần này (đo lỗi)
@@ -527,8 +536,8 @@ export function LabHUD() {
             </div>
           ) : (
             <>
-              <p className={`text-sm font-semibold ${need > 0 ? 'text-warn' : 'text-ok'}`}>{need > 0 ? `Đã có ${trials.length} lần đo, cần thêm ${need} lần nữa.` : `✓ Đủ rồi: ${trials.length} lần đo.`}</p>
-              <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} />
+              <p className={`text-sm font-semibold ${need > 0 ? 'text-warn' : 'text-ok'}`}>{plugin.validity ? `${valid.length}/${plugin.minTrials} lần đo hợp lệ${trials.length > valid.length ? ` (loại ${trials.length - valid.length} lần)` : ''}${need > 0 ? ` – cần thêm ${need} lần.` : ' ✓'}` : need > 0 ? `Đã có ${trials.length} lần đo, cần thêm ${need} lần nữa.` : `✓ Đủ rồi: ${trials.length} lần đo.`}</p>
+              <TrialTable plugin={plugin} trials={trials} onDelete={(i) => st().deleteTrial(i)} onFlag={(i) => st().toggleTrialFlag(i)} />
               <ManualRowForm />
               <ChartGrid plugin={plugin} trials={trials} limit={1} />
               <More title="Cách tính chi tiết (công thức, sai số)">
@@ -546,7 +555,7 @@ export function LabHUD() {
                         {m.label}: trung bình <b className="font-mono">{fmtVi(mu, m.decimals + 1)}</b> {m.unit}, sai số <span className="font-mono">{fmtVi(err, m.decimals + 1)}</span> ({n} lần)
                       </div>
                     ))}
-                  <p className="text-xs text-slate-400">Tính chung mọi lần đo, kể cả khi em đã đổi thông số.</p>
+                  <p className="text-xs text-slate-400">Chỉ tính các lần đo hợp lệ (bỏ qua lần bị loại).</p>
                 </div>
               </More>
               <button className="btn min-h-[44px] w-full" onClick={() => st().openModal('worksheet')}>
@@ -561,8 +570,8 @@ export function LabHUD() {
                 {plugin.result.label}
                 {plugin.result.unit ? ` (${plugin.result.unit})` : ''}
               </label>
-              <input id="student-value" className="input min-h-[46px] font-mono text-base" inputMode="decimal" value={studentValue} onChange={(e) => st().setStudentValue(e.target.value)} placeholder="Ví dụ: 9,78" disabled={submitted} />
-              <p className="mt-1 text-sm text-slate-400">💡 {plugin.result.hint}</p>
+              <input id="student-value" className="input min-h-[46px] font-mono text-base" inputMode="decimal" value={studentValue} onChange={(e) => st().setStudentValue(e.target.value)} placeholder="Nhập số em tính được" disabled={submitted} />
+              {(submitted || !plugin.validity?.hideHintUntilSubmit) && <p className="mt-1 text-sm text-slate-400">💡 {plugin.result.hint}</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm font-semibold" htmlFor="conclusion">
@@ -570,7 +579,12 @@ export function LabHUD() {
               </label>
               <textarea id="conclusion" className="input min-h-[90px]" value={conclusion} onChange={(e) => st().setConclusion(e.target.value)} placeholder={plugin.conclusionPrompt} disabled={submitted} />
             </div>
-            <button className="btn-primary min-h-[50px] w-full text-base" onClick={() => st().openModal('report')}>
+            {plugin.validity?.requireValidToSubmit && !submitted && (
+              <p className={`text-sm font-semibold ${submitBlocked ? 'text-warn' : 'text-ok'}`} role="status">
+                {valid.length}/{plugin.minTrials} lần đo hợp lệ{submitBlocked ? ' – cần đủ mới nộp được bài.' : ' ✓'}
+              </p>
+            )}
+            <button className="btn-primary min-h-[50px] w-full text-base" onClick={() => st().openModal('report')} disabled={submitBlocked}>
               <FileText size={18} /> {submitted ? 'Xem phiếu báo cáo' : 'Nộp bài'}
             </button>
             {submitted && <ResultCompare />}

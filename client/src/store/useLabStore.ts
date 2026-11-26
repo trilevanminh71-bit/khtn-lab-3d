@@ -4,6 +4,7 @@
  * sự cố, trạng thái cảnh 3D, cài đặt (đồ họa máy yếu, trợ năng, API, PIN), chế độ Split-Screen,
  * KHKT Mode, phiên PIN, Auto-Adaptive FPS (mức chất lượng), modal đang mở.
  */
+import { valueIssue } from '../utils/trialTable';
 import { create } from 'zustand';
 import type {
   AppSettings,
@@ -168,6 +169,8 @@ export interface LabState {
   performCurrentStep(): ActionResult;
   takeMeasurement(): ActionResult;
   deleteTrial(index: number): void;
+  /** Bật/tắt cờ "đo lỗi" của một lần đo */
+  toggleTrialFlag(index: number): void;
   commitPending(): ActionResult;
   discardPending(): void;
   addManualTrial(values: Record<string, number>): void;
@@ -475,7 +478,11 @@ export const useLabStore = create<LabState>((set, get) => ({
   commitPending() {
     const st = get();
     if (!st.pendingTrial) return { ok: false, message: 'Chưa có lần đo nào để ghi.' };
-    const trial = { ...st.pendingTrial, index: st.trials.length + 1 };
+    const issue = valueIssue(st.plugin, st.pendingTrial.values);
+    if (issue) return { ok: false, message: st.plugin.validity?.notReadyMessage ?? `Lần đo chưa đạt: ${issue}.` };
+    const fixed = st.plugin.validity?.fixedParams ?? [];
+    const changed = fixed.some((k) => st.pendingTrial !== null && st.pendingTrial.params[k] !== st.params[k]);
+    const trial = { ...st.pendingTrial, index: st.trials.length + 1, ...(changed ? { paramChanged: true } : {}) };
     logAction('commit-trial', String(trial.index));
     set({ trials: [...st.trials, trial], pendingTrial: null });
     return { ok: true, message: `✓ Đã ghi lần ${trial.index} vào bảng.` };
@@ -493,10 +500,18 @@ export const useLabStore = create<LabState>((set, get) => ({
     for (let i = 0; i < n; i++) {
       const r = get().takeMeasurement();
       if (!r.ok) return done ? { ok: true, message: `Đã đo và ghi ${done} lần. ${r.message}` } : r;
-      get().commitPending();
+      const c = get().commitPending();
+      if (!c.ok) {
+        get().discardPending();
+        return done ? { ok: true, message: `Đã đo và ghi ${done} lần. ${c.message}` } : c;
+      }
       done++;
     }
     return { ok: true, message: `✓ Đã đo và ghi ${done} lần.` };
+  },
+  toggleTrialFlag(index) {
+    logAction('flag-trial', String(index));
+    set({ trials: get().trials.map((t) => (t.index === index ? { ...t, flagged: !t.flagged } : t)) });
   },
   deleteTrial(index) {
     const trials = get()

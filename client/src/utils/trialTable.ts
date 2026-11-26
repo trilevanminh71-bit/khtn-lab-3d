@@ -101,10 +101,48 @@ export function exampleTrial(plugin: LabPluginDef, params: Record<string, number
   }
 }
 
+/** Lí do một lần đo chưa đạt yêu cầu số đo (endpoint, số đọc 0) — null nếu đạt */
+export function valueIssue(plugin: LabPluginDef, values: Record<string, number>): string | null {
+  const v = plugin.validity;
+  if (!v) return null;
+  for (const [k, want] of Object.entries(v.requireEq ?? {})) {
+    if (values[k] !== want) {
+      const m = plugin.measurements.find((x) => x.key === k);
+      return k === 'endpoint' ? 'Chưa đạt điểm cuối' : `${m?.label ?? k} ≠ ${want}`;
+    }
+  }
+  for (const k of v.nonZero ?? []) {
+    if (!values[k]) return `${plugin.measurements.find((x) => x.key === k)?.label ?? k} = 0`;
+  }
+  return null;
+}
+
+/** Lí do loại một lần đo khỏi tính toán — null nếu hợp lệ */
+export function trialIssue(plugin: LabPluginDef, t: TrialRecord, trials: TrialRecord[]): string | null {
+  if (t.flagged) return 'Đánh dấu đo lỗi';
+  if (t.paramChanged) return 'Đổi thông số giữa chừng';
+  const vi = valueIssue(plugin, t.values);
+  if (vi) return vi;
+  const fixed = plugin.validity?.fixedParams ?? [];
+  if (fixed.length) {
+    const ref = trials.find((x) => !x.flagged && !x.paramChanged && !valueIssue(plugin, x.values));
+    if (ref && ref !== t) {
+      const diff = fixed.filter((k) => ref.params[k] !== t.params[k]);
+      if (diff.length) return `Khác thông số lần ${ref.index}: ${diff.map((k) => plugin.params.find((p) => p.key === k)?.label ?? k).join(', ')}`;
+    }
+  }
+  return null;
+}
+
+/** Các lần đo hợp lệ (dùng cho trung bình, ước lượng, chấm điểm) */
+export function validTrials(plugin: LabPluginDef, trials: TrialRecord[]): TrialRecord[] {
+  return trials.filter((t) => !trialIssue(plugin, t, trials));
+}
+
 /** Xử lí số liệu tự động của bài; lỗi dữ liệu → danh sách rỗng */
 export function safeSummary(plugin: LabPluginDef, trials: TrialRecord[]): SummaryLine[] {
   try {
-    return getSolver(plugin.solverId).summarize?.(trials, plugin) ?? [];
+    return getSolver(plugin.solverId).summarize?.(validTrials(plugin, trials), plugin) ?? [];
   } catch {
     return [];
   }

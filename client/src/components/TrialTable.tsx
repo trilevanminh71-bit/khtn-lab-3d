@@ -7,9 +7,9 @@
  *  - ManualRowForm: nút "+ Thêm hàng" để tự nhập số đo.
  */
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Flag, Plus, Trash2 } from 'lucide-react';
 import type { LabPluginDef, TrialRecord } from '../types/lab';
-import { buildColumns, cellText, columnTitle, derivedValues, exampleTrial, matchShowIf } from '../utils/trialTable';
+import { buildColumns, cellText, columnTitle, derivedValues, exampleTrial, matchShowIf, trialIssue } from '../utils/trialTable';
 import { parseViNumber } from '../services/appServices';
 import { useLabStore } from '../store/useLabStore';
 
@@ -17,12 +17,17 @@ interface Props {
   plugin: LabPluginDef;
   trials: TrialRecord[];
   onDelete?: (index: number) => void;
+  /** Bật/tắt cờ đo lỗi */
+  onFlag?: (index: number) => void;
   print?: boolean;
   /** Hiện dòng ví dụ khi bảng trống */
   example?: Record<string, number>;
 }
 
-function OneTable({ plugin, trials, onDelete, print, example, title }: Props & { title?: string }) {
+function OneTable({ plugin, trials, onDelete, onFlag, print, example, title }: Props & { title?: string }) {
+  const all = useLabStore((s) => s.trials);
+  // Cột tình trạng chỉ hiện ở bài có quy tắc hợp lệ hoặc khi có lần bị đánh dấu lỗi
+  const showStatus = !!plugin.validity || trials.some((t) => t.flagged || t.paramChanged);
   const sample = useMemo(() => (example && trials.length === 0 ? exampleTrial(plugin, example) : null), [plugin, example, trials.length]);
   const rows = sample ? [sample] : trials;
   const cols = buildColumns(plugin, rows);
@@ -41,6 +46,7 @@ function OneTable({ plugin, trials, onDelete, print, example, title }: Props & {
                   {columnTitle(c)}
                 </th>
               ))}
+              {showStatus && <th className={cell}>Tình trạng</th>}
               {onDelete && <th className={cell} aria-label="Xóa" />}
             </tr>
           </thead>
@@ -48,16 +54,27 @@ function OneTable({ plugin, trials, onDelete, print, example, title }: Props & {
             {rows.map((t) => {
               const d = derivedValues(plugin, t, rows);
               const isSample = t === sample;
+              const issue = isSample ? null : trialIssue(plugin, t, print ? trials : all);
               return (
-                <tr key={isSample ? 'vd' : t.index} className={`${print ? '' : 'border-b border-slate-800'} ${isSample ? 'italic text-slate-500' : ''}`} title={isSample ? 'Dòng ví dụ — không phải số liệu của em' : t.manual ? 'Hàng nhập tay' : undefined}>
+                <tr key={isSample ? 'vd' : t.index} className={`${print ? '' : 'border-b border-slate-800'} ${isSample ? 'italic text-slate-500' : ''} ${issue ? 'text-slate-500 line-through decoration-slate-500/60' : ''}`} title={isSample ? 'Dòng ví dụ — không phải số liệu của em' : t.manual ? 'Hàng nhập tay' : undefined}>
                   <td className={`${cell} whitespace-nowrap`}>{isSample ? 'Ví dụ' : `${t.index}${t.manual ? ' ✎' : ''}`}</td>
                   {cols.map((c) => (
                     <td key={`${c.kind}-${c.key}`} className={`${cell} whitespace-nowrap ${print || isSample ? '' : 'font-mono'} ${c.kind === 'derived' && !isSample ? tone.derived : ''}`}>
                       {cellText(c, t, d)}
                     </td>
                   ))}
+                  {showStatus && (
+                  <td className={`${cell} whitespace-nowrap no-underline`} style={{ textDecoration: 'none' }}>
+                    {isSample ? '' : issue ? <span className={print ? '' : 'rounded bg-amber-900/50 px-1 text-[11px] text-amber-200'} title="Không tính vào trung bình và kết quả">Loại: {issue}</span> : <span className={print ? '' : 'text-ok'}>Hợp lệ</span>}
+                  </td>
+                  )}
                   {onDelete && (
-                    <td className={cell}>
+                    <td className={`${cell} whitespace-nowrap`} style={{ textDecoration: 'none' }}>
+                      {!isSample && onFlag && (
+                        <button className={`mr-1 ${t.flagged ? 'text-warn' : 'text-slate-500 hover:text-warn'}`} onClick={() => onFlag(t.index)} aria-label={t.flagged ? `Bỏ đánh dấu lỗi lần ${t.index}` : `Đánh dấu lần ${t.index} đo lỗi`} title={t.flagged ? 'Bỏ đánh dấu đo lỗi' : 'Đánh dấu đo lỗi (không tính)'}>
+                          <Flag size={13} />
+                        </button>
+                      )}
                       {!isSample && (
                         <button className="text-slate-500 hover:text-danger" onClick={() => onDelete(t.index)} aria-label={`Xóa lần đo ${t.index}`} title="Xóa lần đo bất thường">
                           <Trash2 size={13} />
@@ -94,6 +111,8 @@ export function ManualRowForm() {
   const plugin = useLabStore((s) => s.plugin);
   const params = useLabStore((s) => s.params);
   const [open, setOpen] = useState(false);
+  // Bài chỉ nhận số liệu từ thao tác đo thật (ví dụ chuẩn độ) → không cho nhập tay
+  if (plugin.validity?.noManualRows) return null;
   const [text, setText] = useState<Record<string, string>>({});
   const fields = plugin.measurements.filter((m) => matchShowIf(m.showIf, params));
   const values = Object.fromEntries(fields.map((m) => [m.key, parseViNumber(text[m.key] ?? '')]));

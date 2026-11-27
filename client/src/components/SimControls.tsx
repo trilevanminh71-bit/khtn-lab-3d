@@ -21,9 +21,14 @@ export function SimControls() {
   const completed = useLabStore((s) => s.completedSteps);
   const [more, setMore] = useState(false);
   const showTrail = useLabStore((s) => s.settings.showTrail !== false);
+  const view = useLabStore((s) => s.cameraView);
   const st = useLabStore.getState;
   const current = plugin.steps.findIndex((s) => !completed.includes(s.id));
   const steps = plugin.steps.map((s, i) => ({ s, i })).filter((x) => x.s.trigger);
+  // Giá trị đang chọn của ô góc nhìn (khớp với góc nhìn thật của camera)
+  const stepIdx = view.kind === 'step' ? plugin.steps.findIndex((s) => s.trigger === view.tag) : -1;
+  const viewValue = view.kind === 'step' ? (stepIdx >= 0 ? `step:${stepIdx}` : 'overview') : view.kind;
+  const viewText = view.kind === 'step' && stepIdx >= 0 ? `Bước ${stepIdx + 1}` : VIEWS.find(([k]) => k === view.kind)?.[1] ?? 'Toàn cảnh';
   const run = (): void => {
     const r = st().simRun();
     if (!r.ok) st().toast('info', r.message);
@@ -40,10 +45,10 @@ export function SimControls() {
             <StepForward size={14} /> Từng bước
           </button>
           <label className="block text-xs text-slate-300">
-            Góc nhìn
+            Góc nhìn đang xem: <b className="text-slate-100">{viewText}</b>
             <select
               className="input mt-0.5 py-1.5 text-xs"
-              value=""
+              value={viewValue}
               onChange={(e) => {
                 const v = e.target.value;
                 if (v.startsWith('step:')) st().setCameraView('step', plugin.steps[Number(v.slice(5))]?.trigger ?? null);
@@ -51,7 +56,6 @@ export function SimControls() {
               }}
               aria-label="Góc nhìn chuẩn"
             >
-              <option value="">Chọn góc nhìn…</option>
               {VIEWS.map(([k, label]) => (
                 <option key={k} value={k}>
                   {label}
@@ -76,18 +80,26 @@ export function SimControls() {
             <Pause size={14} /> Tạm dừng
           </button>
         )}
-        {hasRun && !paused && (
-          <button className={BTN} onClick={run} title="Xem lại lần đo vừa rồi">
-            <Play size={14} /> Xem lại
+        {hasRun && (
+          <button
+            className={BTN}
+            onClick={() => {
+              // Đang tạm dừng: bỏ dừng rồi phát lại từ đầu
+              if (paused) st().simRun();
+              run();
+            }}
+            title="Xem lại lần đo vừa rồi từ đầu"
+          >
+            <RotateCcw size={14} /> Xem lại
           </button>
         )}
         <button className={BTN} onClick={() => st().simReset()} title="Đưa dụng cụ và đồng hồ về ban đầu, số liệu đã ghi vẫn giữ">
           <RotateCcw size={14} /> Đặt lại
         </button>
-        <button className={BTN} onClick={() => st().resetCamera()} aria-label="Về góc nhìn ban đầu" title="Về góc nhìn ban đầu">
+        <button className={BTN} onClick={() => st().resetCamera()} aria-label="Về góc nhìn ban đầu (toàn cảnh)" title="Về góc nhìn ban đầu: đưa camera về toàn cảnh bàn thí nghiệm">
           <Focus size={15} />
         </button>
-        <button className={`${BTN} ${more ? 'border-lab-400' : ''}`} title="Từng bước, chọn góc nhìn" onClick={() => setMore(!more)} aria-expanded={more} aria-label="Thêm điều khiển">
+        <button className={`${BTN} ${more ? 'border-lab-400' : ''}`} title={`Từng bước, chọn góc nhìn (đang xem: ${viewText})`} onClick={() => setMore(!more)} aria-expanded={more} aria-label="Thêm điều khiển">
           <MoreHorizontal size={16} />
         </button>
       </div>

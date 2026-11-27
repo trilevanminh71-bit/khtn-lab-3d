@@ -192,7 +192,7 @@ export default function App() {
       <PinGuardModal />
       {settings.showOnboarding && <OnboardingTour />}
 
-      <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 text-white">Đang tải…</div>}>
+      <Suspense fallback={<div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 text-white backdrop-blur-sm">Đang tải…</div>}>
         {modal === 'guide' && <UserGuideModal />}
         {modal === 'report' && <LabReportModal />}
         {modal === 'scanner' && <QrScannerModal />}
@@ -214,7 +214,7 @@ export default function App() {
         </TutorErrorBoundary>
       )}
 
-      <div className="pointer-events-none fixed top-16 left-1/2 z-[60] flex w-[min(92vw,420px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
+      <div className="pointer-events-none fixed top-16 left-1/2 z-[90] flex w-[min(92vw,420px)] -translate-x-1/2 flex-col gap-2" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`pointer-events-auto rounded-lg border-l-4 bg-slate-900/95 px-3 py-2 text-sm text-slate-100 shadow-lg ${TOAST_STYLE[t.kind]}`} onClick={() => useLabStore.getState().dismissToast(t.id)}>
             {t.text}

@@ -60,10 +60,28 @@ export function guardrailCheck(question: string): GuardrailResult {
   return { allowed: true };
 }
 
-/** Trả lời gợi mở offline cho câu hỏi của học sinh trong bài pluginId */
+/** Môn học của một bài theo tiền tố mã bài (vl10 = Vật lí, hh10 = Hóa học, sh10 = Sinh học); không rõ → null */
+export function subjectOfPluginId(id: string): 'physics' | 'chemistry' | 'biology' | null {
+  if (id.startsWith('vl')) return 'physics';
+  if (id.startsWith('hh')) return 'chemistry';
+  if (id.startsWith('sh')) return 'biology';
+  return null;
+}
+
+/** Các mục gợi ý thuộc đúng môn đang học (không lẫn gợi ý môn khác) */
+export function kbForSubject(subject: string): TutorKbEntry[] {
+  return OFFLINE_TUTOR_KB.filter((e) => e.pluginIds.some((id) => subjectOfPluginId(id) === subject));
+}
+
+/** Câu hỏi gợi mở chung của môn (dùng khi bài chưa có gợi ý riêng) */
+export function genericHints(subject: string): string[] {
+  return GENERIC[subject] ?? GENERIC.physics;
+}
+
+/** Trả lời gợi mở offline cho câu hỏi của học sinh trong bài pluginId — chỉ chọn trong gợi ý CÙNG MÔN */
 export function offlineTutorReply(pluginId: string, subject: string, question: string): string {
   const q = normalizeVi(question);
-  const scored = OFFLINE_TUTOR_KB.map((e) => {
+  const scored = kbForSubject(subject).map((e) => {
     let s = e.pluginIds.includes(pluginId) ? 2 : 0;
     for (const k of e.keywords) if (q.includes(k)) s += 3;
     return { e, s };

@@ -434,6 +434,8 @@ export interface AppSettings {
   showOnboarding: boolean;
   /** Hiện vệt chuyển động (quỹ đạo) của vật trong cảnh 3D */
   showTrail: boolean;
+  /** Tên trường in trên phiếu thí nghiệm / phiếu báo cáo */
+  schoolName?: string;
   /** Giao diện sáng / tối / theo hệ thống */
   theme: 'dark' | 'light' | 'system';
 }

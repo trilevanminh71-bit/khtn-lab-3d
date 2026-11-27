@@ -6,7 +6,7 @@
 import { useRef } from 'react';
 import { Download, FileSpreadsheet, Printer } from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
-import { APP_CONFIG, SUBJECT_LABELS } from '../config/appConfig';
+import { SUBJECT_LABELS } from '../config/appConfig';
 import { gradeQuiz } from '../engines/gradingEngine';
 import { exportElement, printElement } from '../utils/printSheet';
 import { buildColumns, cellText, columnTitle, derivedValues, safeSummary } from '../utils/trialTable';
@@ -29,6 +29,10 @@ export default function WorksheetModal() {
   const preSubmitted = useLabStore((s) => s.preSubmitted);
   const postSubmitted = useLabStore((s) => s.postSubmitted);
   const ref = useRef<HTMLDivElement>(null);
+  const school = useLabStore((s) => s.settings.schoolName ?? '');
+  // Đánh số mục liên tục 1, 2, 3… dù một số mục bị ẩn (chưa có số liệu / biểu đồ)
+  let sec = 0;
+  const no = (): number => ++sec;
   const summary = safeSummary(plugin, trials);
   const pre = gradeQuiz(plugin.preQuiz, preAnswers);
   const post = gradeQuiz(plugin.postQuiz, postAnswers);
@@ -68,9 +72,13 @@ export default function WorksheetModal() {
         </>
       }
     >
+      <label className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+        Tên trường
+        <input className="input w-auto min-w-[240px] flex-1" value={school} onChange={(e) => useLabStore.getState().updateSettings({ schoolName: e.target.value.slice(0, 120) })} placeholder="Ví dụ: Trường THPT Nguyễn Du" aria-label="Tên trường" />
+      </label>
       <div ref={ref} id="print-report" className="mx-auto max-w-[210mm] space-y-3 bg-white p-4 text-slate-900 sm:p-6">
         <header className="border-b-2 border-slate-800 pb-2 text-center">
-          <p className="text-xs uppercase">{APP_CONFIG.schoolName}</p>
+          <p className="text-xs uppercase">{school.trim() || 'Trường: ……………………………………'}</p>
           <h1 className="text-lg font-bold uppercase">Phiếu thí nghiệm {SUBJECT_LABELS[plugin.subject]} 10</h1>
           <p className="text-sm font-semibold">{plugin.title}</p>
           <p className="text-xs">{plugin.sgkRef}</p>
@@ -82,34 +90,34 @@ export default function WorksheetModal() {
           <div><b>Ngày:</b> {new Date().toLocaleDateString('vi-VN')}</div>
         </section>
         <section className="text-sm">
-          <h2 className="font-bold">1. Mục tiêu</h2>
+          <h2 className="font-bold">{no()}. Mục tiêu</h2>
           <ul className="list-disc pl-5">{plugin.objectives.map((o) => <li key={o}>{o}</li>)}</ul>
           {plugin.equation && <p className="mt-1">Công thức: <b>{plugin.equation}</b></p>}
         </section>
         <section>
-          <h2 className="font-bold">2. Bảng số liệu ({trials.length} lần đo)</h2>
+          <h2 className="font-bold">{no()}. Bảng số liệu ({trials.length} lần đo)</h2>
           {trials.length ? <TrialTable plugin={plugin} trials={trials} print /> : <p className="text-sm">Chưa có số liệu.</p>}
         </section>
         {summary.length > 0 && (
           <section className="text-sm">
-            <h2 className="font-bold">3. Xử lí số liệu</h2>
+            <h2 className="font-bold">{no()}. Xử lí số liệu</h2>
             <ul className="list-disc pl-5">{summary.map((l) => <li key={l.label}>{l.label}: <b>{l.value}</b>{l.note ? ` — ${l.note}` : ''}</li>)}</ul>
           </section>
         )}
         {trials.length > 0 && (
           <section>
-            <h2 className="mb-1 font-bold">4. Biểu đồ</h2>
+            <h2 className="mb-1 font-bold">{no()}. Biểu đồ</h2>
             <ChartGrid plugin={plugin} trials={trials} mode="print" />
           </section>
         )}
         <section className="text-sm">
-          <h2 className="font-bold">5. Kết quả và kết luận</h2>
+          <h2 className="font-bold">{no()}. Kết quả và kết luận</h2>
           <p>{plugin.result.label}: <b>{studentValue.trim() || '…………'}</b> {plugin.result.unit}</p>
           <p className="mt-1 min-h-[3rem] whitespace-pre-wrap rounded border border-slate-300 p-2">{conclusion || '(Chưa viết kết luận)'}</p>
           {notes.trim() && <p className="mt-1 whitespace-pre-wrap"><b>Ghi chép:</b> {notes}</p>}
         </section>
         <section className="text-sm">
-          <h2 className="font-bold">6. Kiểm tra và nhận xét</h2>
+          <h2 className="font-bold">{no()}. Kiểm tra và nhận xét</h2>
           <p>Trắc nghiệm trước: <b>{preDone ? `${pre.score}/${pre.max}` : 'chưa làm'}</b> · sau: <b>{postDone ? `${post.score}/${post.max}` : 'chưa làm'}</b></p>
           <ul className="list-disc pl-5">{remarks.map((r) => <li key={r}>{r}</li>)}</ul>
           <p className="mt-2">Nhận xét của giáo viên: ……………………………………………………………………………………</p>

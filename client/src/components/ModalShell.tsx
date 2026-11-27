@@ -15,6 +15,14 @@ interface Props {
 }
 
 export function ModalShell({ title, onClose, children, wide, footer, icon }: Props) {
+  // Khóa cuộn trang nền khi hộp thoại mở
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
@@ -23,9 +31,9 @@ export function ModalShell({ title, onClose, children, wide, footer, icon }: Pro
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+    <div className="modal-backdrop fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div
-        className={`card flex max-h-[92vh] w-full flex-col overflow-hidden rounded-b-none sm:rounded-xl ${wide ? 'max-w-5xl' : 'max-w-xl'}`}
+        className={`card modal-card flex max-h-[92vh] w-full flex-col overflow-hidden rounded-b-none sm:rounded-xl ${wide ? 'max-w-5xl' : 'max-w-xl'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center gap-2 border-b border-slate-700 px-4 py-3">

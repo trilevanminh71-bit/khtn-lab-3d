@@ -544,7 +544,9 @@ export const useLabStore = create<LabState>((set, get) => ({
     }
   },
   submitQuiz(phase) {
-    logAction('quiz', phase);
+    const st = get();
+    const answers = phase === 'pre' ? st.preAnswers : st.postAnswers;
+    logAction(answers.every((a) => a < 0) ? 'quiz-skip' : 'quiz', phase);
     set(phase === 'pre' ? { preSubmitted: true } : { postSubmitted: true });
   },
   setMeniscusError: (e) => set({ meniscusErrorMl: e }),
@@ -690,7 +692,8 @@ export const useLabStore = create<LabState>((set, get) => ({
     setTimeout(() => get().dismissToast(id), 4500);
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
-  resetCamera: () => set({ cameraResetNonce: get().cameraResetNonce + 1 }),
+  // Về góc nhìn ban đầu: nhãn góc nhìn cũng trở về "Toàn cảnh"
+  resetCamera: () => set({ cameraResetNonce: get().cameraResetNonce + 1, cameraView: { kind: 'overview', tag: null, nonce: get().cameraView.nonce } }),
   setTutorOpen: (on) => set({ tutorOpen: on }),
   setToolsOpen: (on) => set({ toolsOpen: on })
 }));

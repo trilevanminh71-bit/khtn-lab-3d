@@ -128,7 +128,21 @@ export function QuizPanel({ phase, questions, onDone }: { phase: 'pre' | 'post';
         {!submitted ? (
           <>
             {phase === 'pre' && (
-              <button className="btn-ghost" onClick={() => { useLabStore.getState().submitQuiz(phase); onDone(); }}>
+              <button
+                className="btn-ghost"
+                onClick={() =>
+                  useLabStore.getState().askConfirm({
+                    title: 'Bỏ qua câu hỏi trước thí nghiệm?',
+                    message: 'Phần "tiến bộ" trong phiếu báo cáo sẽ ghi là CHƯA LÀM và giáo viên sẽ thấy em đã bỏ qua.',
+                    confirmLabel: 'Bỏ qua',
+                    onConfirm: () => {
+                      useLabStore.getState().submitQuiz(phase);
+                      useLabStore.getState().toast('info', 'Đã ghi nhận: em bỏ qua câu hỏi trước thí nghiệm.');
+                      onDone();
+                    }
+                  })
+                }
+              >
                 Bỏ qua
               </button>
             )}
@@ -402,7 +416,21 @@ export function LabHUD() {
                 <button className="btn min-h-[40px]" onClick={() => setQuizOpen(true)}>
                   Trả lời
                 </button>
-                <button className="btn-ghost min-h-[40px]" onClick={() => { st().submitQuiz('pre'); setShowPre(false); }}>
+                <button
+                  className="btn-ghost min-h-[40px]"
+                  onClick={() =>
+                    st().askConfirm({
+                      title: 'Bỏ qua câu hỏi trước thí nghiệm?',
+                      message: 'Phần "tiến bộ" trong phiếu báo cáo sẽ ghi là CHƯA LÀM và giáo viên sẽ thấy em đã bỏ qua. Em vẫn làm thí nghiệm bình thường.',
+                      confirmLabel: 'Bỏ qua',
+                      onConfirm: () => {
+                        st().submitQuiz('pre');
+                        setShowPre(false);
+                        st().toast('info', 'Đã ghi nhận: em bỏ qua câu hỏi trước thí nghiệm.');
+                      }
+                    })
+                  }
+                >
                   Bỏ qua
                 </button>
               </section>

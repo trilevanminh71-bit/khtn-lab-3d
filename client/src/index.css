@@ -147,6 +147,11 @@ html.theme-light .panel { background-color: rgba(255, 255, 255, 0.95) !important
 html.theme-light .input { background-color: #ffffff; color: #0f172a; border-color: #94a3b8; }
 html.theme-light .input::placeholder { color: #94a3b8; }
 
+/* Hộp thoại: nền ĐẶC (không để khung 3D / bảng bên dưới lộ ra gây xám nhòe) */
+.modal-card { background-color: #0f172a !important; }
+html.theme-light .modal-card { background-color: #ffffff !important; }
+.high-contrast .modal-card { background-color: #000 !important; }
+
 /* Phiếu báo cáo A4 khi in */
 @media print {
   body * {

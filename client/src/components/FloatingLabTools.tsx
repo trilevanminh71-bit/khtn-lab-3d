@@ -4,13 +4,14 @@
  *  - Máy tính bỏ túi khoa học: dùng bộ tính biểu thức an toàn (sqrt, ^, ln, sin…), biến "ans" = kết quả trước,
  *    có thể chèn trung bình các cột số liệu đo; nút "Điền vào Kết quả".
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bot, Calculator, NotebookPen, Wrench, X } from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
 import { evaluateFormula } from '../engines/formulaEvaluator';
 import { mean } from '../engines/statistics';
 import { fmtVi } from '../services/appServices';
 import { columnLabel } from '../utils/columnLabels';
+import { kvGet, kvSet } from '../offline/db';
 
 const KEYS = ['7', '8', '9', '/', 'sqrt(', '4', '5', '6', '*', '^', '1', '2', '3', '-', '(', '0', '.', 'ans', '+', ')'];
 
@@ -24,7 +25,43 @@ export function FloatingLabTools() {
   const [ans, setAns] = useState(0);
   const [out, setOut] = useState('');
   const [menu, setMenu] = useState(false);
+  const [saved, setSaved] = useState<'idle' | 'saving' | 'ok' | 'fail' | 'restored'>('idle');
+  const loadedFor = useRef('');
   const st = useLabStore.getState;
+  const dec = plugin.result.decimals;
+
+  // Sổ tay: khôi phục ghi chép của bài khi mở lại trang (lưu riêng, không phụ thuộc bản nháp)
+  useEffect(() => {
+    let alive = true;
+    loadedFor.current = '';
+    void kvGet(`notes:${plugin.id}`)
+      .then((v) => {
+        if (!alive) return;
+        loadedFor.current = plugin.id;
+        if (v && !useLabStore.getState().notes.trim()) {
+          useLabStore.getState().setNotes(v);
+          setSaved('restored');
+        }
+      })
+      .catch(() => {
+        loadedFor.current = plugin.id;
+      });
+    return () => {
+      alive = false;
+    };
+  }, [plugin.id]);
+
+  // Sổ tay: tự lưu sau 0,6 giây ngừng gõ
+  useEffect(() => {
+    if (loadedFor.current !== plugin.id) return;
+    setSaved((x) => (x === 'restored' && notes ? x : 'saving'));
+    const id = setTimeout(() => {
+      kvSet(`notes:${plugin.id}`, notes)
+        .then(() => setSaved((x) => (x === 'restored' ? x : 'ok')))
+        .catch(() => setSaved('fail'));
+    }, 600);
+    return () => clearTimeout(id);
+  }, [notes, plugin.id]);
 
   const evaluate = (): void => {
     try {
@@ -110,12 +147,32 @@ export function FloatingLabTools() {
               })}
             </div>
           )}
-          <button className="btn w-full text-xs" disabled={!out.startsWith('=')} onClick={() => { st().setStudentValue(String(Number(ans.toPrecision(6))).replace('.', ',')); st().toast('success', 'Đã điền vào ô Kết quả.'); }}>
-            Điền kết quả này vào phiếu
+          <button
+            className="btn w-full text-xs"
+            disabled={!out.startsWith('=')}
+            onClick={() => {
+              // Làm tròn theo đúng số chữ số thập phân của đại lượng kết quả bài học
+              const text = ans.toFixed(dec).replace('.', ',');
+              st().setStudentValue(text);
+              st().toast('success', `Đã điền ${text} ${plugin.result.unit} vào ô Kết quả (làm tròn ${dec} chữ số thập phân).`);
+            }}
+          >
+            Điền vào phiếu: {out.startsWith('=') ? `${ans.toFixed(dec).replace('.', ',')} ${plugin.result.unit}` : '—'} ({dec} chữ số thập phân)
           </button>
         </div>
       ) : (
-        <textarea className="input min-h-[180px] text-sm" value={notes} onChange={(e) => st().setNotes(e.target.value)} placeholder="Ghi chép hiện tượng quan sát, nhận xét, nháp tính toán… (tự lưu cùng bản nháp)" aria-label="Sổ tay thí nghiệm" />
+        <div className="space-y-1">
+          <textarea className="input min-h-[180px] text-sm" value={notes} onChange={(e) => st().setNotes(e.target.value)} placeholder="Ghi chép hiện tượng quan sát, nhận xét, nháp tính toán…" aria-label="Sổ tay thí nghiệm" />
+          <p className={`text-xs ${saved === 'fail' ? 'text-warn' : 'text-slate-400'}`} role="status">
+            {saved === 'fail'
+              ? '⚠ Không lưu được (trình duyệt chặn bộ nhớ, ví dụ chế độ ẩn danh) — tải lại trang sẽ mất ghi chép.'
+              : saved === 'restored'
+                ? '✓ Đã khôi phục ghi chép lần trước của bài này.'
+                : saved === 'saving'
+                  ? 'Đang lưu…'
+                  : '✓ Đã lưu trên máy này — tải lại trang vẫn còn.'}
+          </p>
+        </div>
       )}
     </div>
   );

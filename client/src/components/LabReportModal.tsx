@@ -17,7 +17,7 @@ import { encodeQrPayload } from '../utils/qrSyncCodec';
 import { misconceptionsToMask, getMisconception } from '../data/misconceptionKB';
 import { pluginIndexOf } from '../plugins/pluginRegistry';
 import { currentApiUrl, fmtVi, parseViNumber } from '../services/appServices';
-import { APP_CONFIG, SUBJECT_LABELS } from '../config/appConfig';
+import { SUBJECT_LABELS } from '../config/appConfig';
 import { createGuard } from '../utils/debounceGuard';
 import { soundEngine } from '../audio/soundEngine';
 import { vibrate } from '../utils/haptics';
@@ -181,7 +181,7 @@ export default function LabReportModal() {
     >
       <div ref={sheetRef} id="print-report" className="mx-auto max-w-[210mm] space-y-3 bg-white p-4 text-slate-900 sm:p-6">
         <header className="border-b-2 border-slate-800 pb-2 text-center">
-          <p className="text-xs uppercase">{APP_CONFIG.schoolName}</p>
+          <p className="text-xs uppercase">{s.settings.schoolName?.trim() || 'Trường: ……………………………………'}</p>
           <h1 className="text-lg font-bold uppercase">Phiếu báo cáo thí nghiệm {SUBJECT_LABELS[s.plugin.subject]} 10</h1>
           <p className="text-sm font-semibold">{s.plugin.title}</p>
           <p className="text-xs">{s.plugin.sgkRef}</p>

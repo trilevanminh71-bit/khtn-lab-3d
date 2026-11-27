@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Send, Volume2, WifiOff, X } from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
 import { APP_CONFIG, SUBJECT_LABELS } from '../config/appConfig';
-import { guardrailCheck, OFFLINE_TUTOR_KB, offlineTutorReply } from '../data/offlineTutorKB';
+import { genericHints, guardrailCheck, kbForSubject, offlineTutorReply } from '../data/offlineTutorKB';
 import { bumpAiQuota, getAiCache, getAiQuotaUsed, setAiCache } from '../offline/db';
 import { createGuard } from '../utils/debounceGuard';
 import { hashString } from '../utils/randomizer';
@@ -107,7 +107,9 @@ export default function AiTutorDrawer() {
   const left = APP_CONFIG.aiDailyQuota - quota;
   const SR = getSR();
   const canVoice = !blocked && SR !== null;
-  const localHints = OFFLINE_TUTOR_KB.filter((e) => e.pluginIds.includes(plugin.id));
+  // Gợi ý cục bộ: ưu tiên của bài đang làm, luôn đúng môn hiện tại
+  const subjectKb = kbForSubject(plugin.subject);
+  const localHints = subjectKb.filter((e) => e.pluginIds.includes(plugin.id));
 
   useEffect(() => {
     void readQuota().then(setQuota);
@@ -309,6 +311,14 @@ export default function AiTutorDrawer() {
           <X size={18} />
         </button>
       </header>
+      {!online && (
+        <div className="flex items-start gap-2 border-b border-amber-500/70 bg-amber-900/50 px-3 py-2 text-sm text-amber-100" role="alert">
+          <WifiOff size={16} className="mt-0.5 shrink-0" />
+          <span>
+            <b>Đang mất mạng.</b> Trợ lý AI tạm dừng — dưới đây là gợi ý có sẵn môn <b>{SUBJECT_LABELS[plugin.subject]}</b>. Khi có mạng, em hỏi AI tiếp được ngay.
+          </span>
+        </div>
+      )}
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
         {msgs.map((m, i) => (
           <div key={i} className={`max-w-[88%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${m.role === 'student' ? 'ml-auto bg-lab-700 text-white' : 'bg-slate-800 text-slate-100'}`}>
@@ -324,9 +334,19 @@ export default function AiTutorDrawer() {
           </div>
         ))}
         {busy && <div className="text-xs text-slate-400">Trợ lý đang suy nghĩ… (tối đa 8 giây)</div>}
+        {blocked && localHints.length === 0 && (
+          <section className="space-y-1 rounded-xl border border-slate-700 p-3 text-sm" aria-label="Gợi ý có sẵn">
+            <h3 className="font-semibold text-lab-400">Gợi ý chung môn {SUBJECT_LABELS[plugin.subject]}</h3>
+            <ul className="list-disc space-y-0.5 pl-4 text-slate-200">
+              {genericHints(plugin.subject).map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </section>
+        )}
         {blocked && localHints.length > 0 && (
           <section className="space-y-2 rounded-xl border border-slate-700 p-3 text-sm" aria-label="Gợi ý có sẵn">
-            <h3 className="font-semibold text-lab-400">Gợi ý có sẵn cho bài này</h3>
+            <h3 className="font-semibold text-lab-400">Gợi ý có sẵn cho bài này ({SUBJECT_LABELS[plugin.subject]})</h3>
             {localHints.map((e) => (
               <div key={e.id}>
                 <ul className="list-disc space-y-0.5 pl-4 text-slate-200">

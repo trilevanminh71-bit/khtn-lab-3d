@@ -66,6 +66,9 @@ export default function TeacherPortal() {
   const [pluginFilter, setPluginFilter] = useState('Tất cả');
   const [msg, setMsg] = useState('');
   const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [showSeed, setShowSeed] = useState(false);
+  /** null = chưa đồng bộ; false = máy chủ cũ chưa có kiểm tra bài nộp; true = có */
+  const [serverChecks, setServerChecks] = useState<boolean | null>(null);
   const [rejected, setRejected] = useState<RejectedRow[]>([]);
   const [eventsUid, setEventsUid] = useState<string | null>(null);
   const st = useLabStore.getState;
@@ -83,8 +86,14 @@ export default function TeacherPortal() {
 
   const classes = useMemo(() => ['Tất cả', ...new Set(rows.map((r) => r.classCode))].sort(), [rows]);
   const isFlagged = (r: SubmissionRecord): boolean => (r.flags?.length ?? 0) > 0 || (r.serverRejected?.length ?? 0) > 0;
-  const filtered = rows.filter((r) => (cls === 'Tất cả' || r.classCode === cls) && (pluginFilter === 'Tất cả' || r.pluginId === pluginFilter) && (!onlyFlagged || isFlagged(r)));
-  const flaggedCount = filtered.filter(isFlagged).length;
+  const inScope = (r: SubmissionRecord): boolean => (cls === 'Tất cả' || r.classCode === cls) && (pluginFilter === 'Tất cả' || r.pluginId === pluginFilter);
+  // Bảng hiển thị: bài mẫu chỉ hiện khi giáo viên bật "Hiện bài mẫu"
+  const filtered = rows.filter((r) => inScope(r) && (showSeed || r.source !== 'seed') && (!onlyFlagged || isFlagged(r)));
+  // Số liệu THẬT dùng cho thống kê: không gồm bài mẫu và bài bị máy chủ từ chối
+  const real = rows.filter((r) => inScope(r) && r.source !== 'seed' && !(r.serverRejected?.length));
+  const seedCount = rows.filter((r) => inScope(r) && r.source === 'seed').length;
+  const localRejectedCount = rows.filter((r) => inScope(r) && r.source !== 'seed' && (r.serverRejected?.length ?? 0) > 0).length;
+  const flaggedCount = real.filter(isFlagged).length;
   const pName = (id: string): string => plugins.find((p) => p.id === id)?.shortTitle ?? id;
 
   const exportCsv = (): void => {
@@ -115,35 +124,71 @@ export default function TeacherPortal() {
   const syncLan = async (): Promise<void> => {
     setMsg('Đang lấy dữ liệu từ máy chủ lớp…');
     try {
-      const targets = cls === 'Tất cả' ? classes.filter((c) => c !== 'Tất cả') : [cls];
-      if (targets.length === 0) throw new Error('Chưa có mã lớp — hãy chọn lớp hoặc nhập bài trước.');
+      // Lớp chỉ có bài mẫu không cần hỏi máy chủ
+      const realClasses = [...new Set(rows.filter((r) => r.source !== 'seed').map((r) => r.classCode))];
+      const targets = cls === 'Tất cả' ? realClasses : [cls];
+      if (targets.length === 0) throw new Error('Chưa có mã lớp của học sinh thật — hãy chọn lớp hoặc thu bài trước.');
       let added = 0;
       let flagged = 0;
+      let checks = true;
       const rej: RejectedRow[] = [];
+      const failed: string[] = [];
       for (const c of targets) {
-        const data = await apiFetch<{ submissions: SubmissionRecord[] }>(`/api/analytics/class/${encodeURIComponent(c)}`);
-        for (const r of data.submissions) {
-          const flags = Array.isArray(r.flags) ? r.flags.map(String) : [];
-          if (flags.length) flagged++;
+        let data: { submissions?: unknown; flagged?: unknown };
+        try {
+          data = await apiFetch<{ submissions?: unknown; flagged?: unknown }>(`/api/analytics/class/${encodeURIComponent(c)}`);
+        } catch (e) {
+          const m = e instanceof Error ? e.message : String(e);
+          failed.push(`${c}: ${/failed to fetch|networkerror|load failed/i.test(m) ? 'không kết nối được' : m}`);
+          continue;
+        }
+        // Máy chủ cũ (chưa cập nhật / chưa khởi động lại) không trả trường "flagged"
+        if (typeof data.flagged !== 'number') checks = false;
+        const list = Array.isArray(data.submissions) ? (data.submissions as SubmissionRecord[]) : [];
+        for (const r of list) {
+          if (!r || typeof r.uid !== 'string') continue;
+          const flags = Array.isArray(r.flags) ? r.flags.map(String) : undefined;
+          if (flags?.length) flagged++;
           const exists = await db.submissions.where('uid').equals(r.uid).first();
           if (!exists) {
             await db.submissions.add({ ...r, flags, id: undefined, source: 'lan', synced: true });
             added++;
-          } else {
+          } else if (flags) {
             // Cập nhật cờ máy chủ cho bài đã có (ví dụ bài nộp từ chính máy này)
-            await db.submissions.where('uid').equals(r.uid).modify({ flags });
+            await db.submissions.where('uid').equals(r.uid).modify({ flags, synced: true });
           }
         }
         try {
-          const list = await apiFetch<RejectedRow[]>(`/api/analytics/class/${encodeURIComponent(c)}/rejected`);
-          rej.push(...list.map((x) => ({ ...x, classCode: c })));
+          const raw = await apiFetch<unknown>(`/api/analytics/class/${encodeURIComponent(c)}/rejected`);
+          if (Array.isArray(raw)) {
+            for (const x of raw as Array<Partial<RejectedRow>>) {
+              if (!x || typeof x.uid !== 'string') continue;
+              rej.push({
+                uid: x.uid,
+                classCode: c,
+                studentCode: typeof x.studentCode === 'string' ? x.studentCode : '?',
+                pluginId: typeof x.pluginId === 'string' ? x.pluginId : '',
+                reasons: Array.isArray(x.reasons) ? x.reasons.map(String) : [],
+                receivedAt: typeof x.receivedAt === 'number' ? x.receivedAt : 0
+              });
+            }
+          }
         } catch {
-          /* máy chủ cũ chưa có API này → bỏ qua */
+          checks = false; // máy chủ cũ chưa có API bài bị từ chối
         }
       }
+      if (failed.length === targets.length) {
+        setMsg(`Không đồng bộ được — kiểm tra máy chủ lớp đã bật và địa chỉ trong Cài đặt (${failed.join('; ')}).`);
+        return;
+      }
       setRejected(rej);
+      setServerChecks(checks);
       await refresh();
-      setMsg(`Đồng bộ LAN xong: thêm ${added} bài mới · ${flagged} bài có cờ nghi vấn · ${rej.length} bài bị máy chủ từ chối.`);
+      const parts = [`thêm ${added} bài mới`];
+      if (checks) parts.push(`${flagged} bài có cờ nghi vấn`, `${rej.length} bài bị máy chủ từ chối`);
+      else parts.push('máy chủ chưa bật kiểm tra bài nộp (cần cập nhật và khởi động lại máy chủ)');
+      if (failed.length) parts.push(`chưa lấy được ${failed.join('; ')}`);
+      setMsg(`Đồng bộ LAN xong: ${parts.join(' · ')}.`);
     } catch (e) {
       setMsg(`Không đồng bộ được: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -216,14 +261,14 @@ export default function TeacherPortal() {
   // Thống kê ngộ nhận
   const misStats = useMemo(() => {
     const count = new Map<string, number>();
-    for (const r of filtered) for (const m of r.misconceptions) count.set(m, (count.get(m) ?? 0) + 1);
+    for (const r of real) for (const m of r.misconceptions ?? []) count.set(m, (count.get(m) ?? 0) + 1);
     return [...count.entries()].sort((a, b) => b[1] - a[1]);
-  }, [filtered]);
+  }, [real]);
 
   // Tăng trưởng theo lớp
   const growth = useMemo(() => {
     const by = new Map<string, SubmissionRecord[]>();
-    for (const r of rows) by.set(r.classCode, [...(by.get(r.classCode) ?? []), r]);
+    for (const r of rows) if (r.source !== 'seed' && !r.serverRejected?.length) by.set(r.classCode, [...(by.get(r.classCode) ?? []), r]);
     return [...by.entries()].map(([c, list]) => {
       const valid = list.filter((r) => r.postMax > 0);
       return {
@@ -239,8 +284,12 @@ export default function TeacherPortal() {
 
   // KHKT: 10T1 (thực nghiệm) vs 10T2 (đối chứng)
   const khkt = useMemo(() => {
-    const a = rows.filter((r) => r.classCode === '10T1' && r.postMax > 0);
-    const b = rows.filter((r) => r.classCode === '10T2' && r.postMax > 0);
+    const pick = (code: string, seed: boolean): SubmissionRecord[] => rows.filter((r) => r.classCode === code && r.postMax > 0 && (r.source === 'seed') === seed && !r.serverRejected?.length);
+    const realA = pick('10T1', false);
+    const realB = pick('10T2', false);
+    const useSeed = realA.length < 3 || realB.length < 3;
+    const a = useSeed ? pick('10T1', true) : realA;
+    const b = useSeed ? pick('10T2', true) : realB;
     if (a.length < 3 || b.length < 3) return null;
     const ga = a.map((r) => normalizedGain(r.preScore, r.postScore, r.postMax));
     const gb = b.map((r) => normalizedGain(r.preScore, r.postScore, r.postMax));
@@ -253,7 +302,7 @@ export default function TeacherPortal() {
       score: { a: mean(sa), b: mean(sb), t: welchTTest(sa, sb), d: cohenD(sa, sb) },
       err: { a: mean(a.map((r) => r.relErrorPercent)), b: mean(b.map((r) => r.relErrorPercent)) },
       likert: { a: mean(a.flatMap((r) => r.likert)), b: mean(b.flatMap((r) => r.likert)) },
-      seeded: a.some((r) => r.source === 'seed') || b.some((r) => r.source === 'seed')
+      seeded: useSeed
     };
   }, [rows]);
 
@@ -291,15 +340,27 @@ export default function TeacherPortal() {
           <label className="flex items-center gap-1.5 text-sm" title="Chỉ hiện bài có cờ nghi vấn hoặc bị máy chủ từ chối">
             <input type="checkbox" className="h-4 w-4" checked={onlyFlagged} onChange={(e) => setOnlyFlagged(e.target.checked)} /> Chỉ bài nghi vấn
           </label>
+          {seedCount > 0 && (
+            <label className="flex items-center gap-1.5 text-sm" title="Bài mẫu chỉ để xem thử, không bao giờ tính vào thống kê">
+              <input type="checkbox" className="h-4 w-4" checked={showSeed} onChange={(e) => setShowSeed(e.target.checked)} /> Hiện {seedCount} bài mẫu
+            </label>
+          )}
         </div>
       )}
 
       {tab === 'overview' && (
         <div className="overflow-x-auto">
           <p className="mb-1 text-xs text-slate-400">
-            {filtered.length} bài · điểm TB {fmtVi(mean(filtered.map((r) => r.score)), 1)} · sai số TB {fmtVi(mean(filtered.map((r) => r.relErrorPercent)), 1)}%
-            {flaggedCount > 0 && <span className="text-warn"> · ⚠ {flaggedCount} bài nghi vấn</span>}
+            {real.length} bài thật · điểm TB {real.length ? fmtVi(mean(real.map((r) => r.score)), 1) : '—'} · sai số TB {real.length ? `${fmtVi(mean(real.map((r) => r.relErrorPercent).filter((x) => x < 999)), 1)}%` : '—'}
+            {flaggedCount > 0 && <span className="text-warn"> · ⚠ {flaggedCount} bài nghi vấn (vẫn tính, cần xem lại)</span>}
+            {(seedCount > 0 || localRejectedCount > 0) && (
+              <span className="text-slate-500">
+                {' '}· không tính {[seedCount ? `${seedCount} bài mẫu` : '', localRejectedCount ? `${localRejectedCount} bài bị từ chối` : ''].filter(Boolean).join(', ')}
+              </span>
+            )}
+            {serverChecks === false && <span className="block text-amber-200">⚠ Máy chủ lớp đang chạy bản cũ: chưa có cờ nghi vấn / bài bị từ chối. Cập nhật mã và khởi động lại máy chủ.</span>}
           </p>
+          {showSeed && seedCount > 0 && <p className="mb-1 rounded border border-amber-500 bg-amber-900/30 p-1.5 text-xs text-amber-200">⚠ Đang hiện DỮ LIỆU MẪU (nhãn “Mẫu”) chỉ để xem — không tính vào điểm trung bình, ngộ nhận và tăng trưởng của lớp.</p>}
           <IntegrityPanel rejected={rejected.filter((x) => (cls === 'Tất cả' || x.classCode === cls) && (pluginFilter === 'Tất cả' || x.pluginId === pluginFilter))} pName={pName} eventsUid={eventsUid} onCloseEvents={() => setEventsUid(null)} />
           <table className="w-full text-xs">
             <thead>
@@ -309,7 +370,7 @@ export default function TeacherPortal() {
             </thead>
             <tbody>
               {filtered.slice(0, 300).map((r) => (
-                <tr key={r.uid} className="border-b border-slate-800">
+                <tr key={r.uid} className={`border-b border-slate-800 ${r.source === 'seed' ? 'italic text-slate-500' : ''}`}>
                   <td className="p-1">{r.classCode}</td>
                   <td className="p-1">{r.studentCode}</td>
                   <td className="p-1">{r.studentName}</td>
@@ -325,8 +386,10 @@ export default function TeacherPortal() {
                       {(r.flags ?? []).map((f) => (
                         <span key={f} className="chip bg-amber-900/60 text-amber-200" title={FLAG_LABELS[f]?.hint ?? f}>{flagLabel(f)}</span>
                       ))}
-                      {!isFlagged(r) && r.synced && <span className="text-ok">✓</span>}
-                      {r.synced && (
+                      {!isFlagged(r) && r.synced && r.flags !== undefined && <span className="text-ok" title="Máy chủ đã kiểm tra, không có nghi vấn">✓</span>}
+                      {r.source !== 'seed' && r.synced && r.flags === undefined && !r.serverRejected?.length && <span className="text-slate-500" title="Bài nhận từ máy chủ bản cũ, chưa được kiểm tra">chưa kiểm tra</span>}
+                      {r.source !== 'seed' && !r.synced && !r.serverRejected?.length && <span className="text-slate-500" title="Chưa gửi lên máy chủ lớp">chưa gửi</span>}
+                      {r.synced && r.source !== 'seed' && (
                         <button className="text-lab-400 underline" onClick={() => setEventsUid(r.uid)} title="Xem các thao tác học sinh đã làm">
                           Nhật kí
                         </button>
@@ -337,7 +400,8 @@ export default function TeacherPortal() {
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="p-3 text-sm text-slate-400">Chưa có bài nộp. Dùng “Thu bài QR”, “Đồng bộ LAN”, hoặc nạp dữ liệu mẫu ở tab Số liệu KHKT.</p>}
+          {filtered.length === 0 && seedCount > 0 && !showSeed && <p className="p-3 text-sm text-slate-400">Chưa có bài của học sinh thật. Có {seedCount} bài mẫu — tick “Hiện bài mẫu” để xem.</p>}
+          {filtered.length === 0 && seedCount === 0 && <p className="p-3 text-sm text-slate-400">Chưa có bài nộp. Dùng “Thu bài QR”, “Đồng bộ LAN”, hoặc nạp dữ liệu mẫu ở tab Số liệu KHKT.</p>}
         </div>
       )}
 
@@ -346,7 +410,7 @@ export default function TeacherPortal() {
           {misStats.length === 0 && <p className="text-sm text-slate-400">Chưa phát hiện ngộ nhận nào trong dữ liệu đã chọn.</p>}
           {misStats.map(([id, n]) => {
             const m = getMisconception(id);
-            const pct = (n / Math.max(1, filtered.length)) * 100;
+            const pct = (n / Math.max(1, real.length)) * 100;
             return (
               <div key={id} className="rounded-lg border border-slate-700 p-2 text-sm">
                 <div className="flex items-center gap-2">

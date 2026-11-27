@@ -44,13 +44,21 @@ function EventsViewer({ uid, onClose }: { uid: string; onClose: () => void }) {
   });
   const [data, setData] = useState<{ flags: string[]; events: EventRow[] } | null>(null);
   const [err, setErr] = useState('');
+  /** true = cần mã quản trị (401) → hiện ô nhập mã */
+  const [needToken, setNeedToken] = useState(false);
   const load = async (t: string): Promise<void> => {
     setErr('');
+    setNeedToken(false);
     try {
       const r = await apiFetch<{ flags: string[]; events: EventRow[] }>(`/api/submissions/${encodeURIComponent(uid)}/events`, t ? { headers: { 'X-Admin-Token': t } } : {});
       setData({ flags: Array.isArray(r.flags) ? r.flags : [], events: Array.isArray(r.events) ? r.events : [] });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const m = e instanceof Error ? e.message : String(e);
+      if (m.includes('401')) {
+        setNeedToken(true);
+        setErr('Máy chủ yêu cầu mã quản trị.');
+      } else if (m.includes('404')) setErr('Không có nhật kí: máy chủ đang chạy bản cũ (cần cập nhật và khởi động lại) hoặc bài chưa có trên máy chủ.');
+      else setErr(`Không tải được nhật kí: ${m}`);
     }
   };
   useEffect(() => {
@@ -65,7 +73,8 @@ function EventsViewer({ uid, onClose }: { uid: string; onClose: () => void }) {
           <X size={14} />
         </button>
       </div>
-      {err && (
+      {err && !needToken && <p className="text-xs text-warn">{err}</p>}
+      {needToken && (
         <form
           className="flex flex-wrap items-center gap-1 text-xs"
           onSubmit={(e) => {

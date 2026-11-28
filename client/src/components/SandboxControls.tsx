@@ -6,11 +6,26 @@
  * Mọi thao tác chỉ đổi store.sandboxWorld — không tạo lần đo, không ghi bảng số liệu, không ảnh hưởng bài nộp chấm điểm.
  */
 import { useEffect, useRef } from 'react';
-import { AlertTriangle, Eraser, Focus, Info, OctagonAlert, Pause, Play, RotateCcw, StepForward } from 'lucide-react';
+import {
+  AlertTriangle,
+  Eraser,
+  Focus,
+  Info,
+  Link2,
+  LocateFixed,
+  OctagonAlert,
+  Pause,
+  Play,
+  RotateCcw,
+  StepForward,
+  Undo2
+} from 'lucide-react';
 import { useLabStore } from '../store/useLabStore';
 import { equipmentById } from '../data/equipmentCatalog';
 import {
+  childOn,
   controlsFor,
+  mountOptions,
   microscopeSharpness,
   readoutsFor,
   SANDBOX_SPEEDS,
@@ -93,9 +108,11 @@ function MicroscopeView({ slot }: { slot: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const s = useLabStore((x) => x.sandboxWorld.states[slot]);
   const items = useLabStore((x) => x.sandboxItems);
-  const slide = useLabStore((x) => x.sandboxWorld.states[x.sandboxItems.indexOf('lam-kinh')]);
+  // Chỉ thấy mẫu khi lam kính đã đặt trên bàn kính của chính kính hiển vi này
+  const slideIdx = useLabStore((x) => childOn(x.sandboxWorld, x.sandboxItems, 'lam-kinh', slot));
+  const slide = useLabStore((x) => x.sandboxWorld.states[slideIdx]);
   const sharp = s ? microscopeSharpness(s) : 0;
-  const hasSample = items.includes('lam-kinh');
+  const hasSample = slideIdx >= 0 && items.length > 0;
   useEffect(() => {
     const c = ref.current;
     const ctx = c?.getContext('2d');
@@ -148,7 +165,7 @@ function MicroscopeView({ slot }: { slot: number }) {
         {!s.lamp
           ? 'Đèn tắt — thị trường tối.'
           : !hasSample
-            ? 'Chưa có lam kính trên bàn.'
+            ? 'Chưa đặt lam kính lên bàn kính — kéo lam kính tới kính hiển vi.'
             : sharp > 0.85
               ? 'Ảnh rõ nét.'
               : sharp > 0.4
@@ -180,6 +197,7 @@ export function SandboxItemControls({ slot }: { slot: number }) {
           <Focus size={12} /> Xem gần
         </button>
       </div>
+      <PositionControls slot={slot} />
       {readouts.length > 0 && (
         <dl className="grid grid-cols-2 gap-1" aria-live="polite">
           {readouts.map((r) => (
@@ -318,5 +336,75 @@ export function SandboxAlerts() {
           );
         })}
     </section>
+  );
+}
+
+/** Vị trí 3D của dụng cụ: độ cao, lắp vào dụng cụ chủ, tháo / đặt lại vị trí, cất vào tủ */
+function PositionControls({ slot }: { slot: number }) {
+  const items = useLabStore((s) => s.sandboxItems);
+  const pos = useLabStore((s) => s.sandboxWorld.pos[slot]);
+  const link = useLabStore((s) => s.sandboxWorld.links[slot] ?? -1);
+  if (!pos) return null;
+  const opts = mountOptions(items, slot);
+  const hostName = link >= 0 ? equipmentById(items[link])?.name : '';
+  const mountLabel = opts.find((o) => o.host === link)?.def.label;
+  return (
+    <div className="space-y-1 rounded border border-slate-700/70 p-1.5 text-xs" aria-label="Vị trí dụng cụ">
+      <p className="text-[11px] text-slate-400">
+        {link >= 0 ? (
+          <span className="text-emerald-300">
+            <Link2 size={11} className="inline" /> Đã lắp {mountLabel} ({link + 1}. {hostName})
+          </span>
+        ) : (
+          'Đứng tự do trên bàn'
+        )}{' '}
+        · x {pos[0].toFixed(2)} · z {pos[2].toFixed(2)} m
+      </p>
+      {link < 0 && (
+        <label className="block">
+          <span className="flex justify-between">
+            <span>Độ cao (Shift + kéo trong 3D)</span>
+            <b className="font-mono text-amber-200">{Math.round(pos[1] * 100)} cm</b>
+          </span>
+          <input
+            type="range"
+            className="w-full"
+            min={0}
+            max={1}
+            step={0.01}
+            value={pos[1]}
+            onChange={(e) => st().sandboxPlace(slot, pos[0], Number(e.target.value), pos[2])}
+            aria-label="Độ cao dụng cụ"
+          />
+        </label>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {opts
+          .filter((o) => o.host !== link)
+          .map((o) => (
+            <button
+              key={`${o.host}-${o.def.label}`}
+              className="btn min-h-[30px] px-2 text-[11px]"
+              onClick={() => {
+                const h = useLabStore.getState().sandboxWorld.pos[o.host];
+                const r = st().sandboxPlace(slot, h[0], h[1], h[2], o.host);
+                if (r.message) st().toast('success', r.message);
+              }}
+            >
+              <Link2 size={12} /> Lắp {o.def.label} ({o.host + 1})
+            </button>
+          ))}
+        <button
+          className="btn min-h-[30px] px-2 text-[11px]"
+          onClick={() => st().resetSandboxPos(slot)}
+          title={link >= 0 ? 'Tháo ra và đặt về chỗ trống trên bàn' : 'Đặt về chỗ trống trên bàn'}
+        >
+          <LocateFixed size={12} /> {link >= 0 ? 'Tháo ra' : 'Đặt lại vị trí'}
+        </button>
+        <button className="btn min-h-[30px] px-2 text-[11px]" onClick={() => st().removeSandboxItem(slot)}>
+          <Undo2 size={12} /> Cất vào tủ
+        </button>
+      </div>
+    </div>
   );
 }

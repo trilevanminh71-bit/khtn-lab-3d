@@ -3,7 +3,7 @@
  * Menu phụ chứa: So sánh 3D, Cổng giáo viên (PIN), Chế độ KHKT (PIN), Cài đặt, trạng thái mạng / máy chủ / đồ họa.
  */
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Columns2, HelpCircle, Menu, Moon, Settings, Sun, Trophy, WifiOff } from 'lucide-react';
+import { BookOpen, Columns2, HelpCircle, LayoutGrid, Menu, Moon, Settings, Sun, Trophy, WifiOff } from 'lucide-react';
 import { useIsLight } from '../utils/theme';
 import { APP_CONFIG, SUBJECT_LABELS } from '../config/appConfig';
 import { useLabStore } from '../store/useLabStore';
@@ -52,6 +52,9 @@ export function Navbar() {
     <header className="no-print flex items-center gap-1.5 border-b border-slate-800 bg-slate-950 px-2 py-1.5 sm:gap-2 sm:px-3" data-tour="navbar">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-lab-700 text-lg" aria-hidden="true">🧪</span>
       <span className="hidden text-sm font-bold md:block">{APP_CONFIG.appName}</span>
+      <button className="btn min-h-[44px] px-2.5" onClick={() => st().setModeChooser(true)} aria-label="Chọn chế độ" title="Quay lại chọn chế độ: Thí nghiệm tự do / Làm bài tập / Giáo viên">
+        <LayoutGrid size={18} /> <span className="hidden text-xs lg:inline">Chế độ</span>
+      </button>
       <nav className="flex min-w-0 flex-1 justify-center gap-1" aria-label="Chọn môn học" data-tour="subjects">
         {(Object.keys(SUBJECT_LABELS) as SubjectId[]).map((s) => {
           const Icon = SUBJECT_ICONS[s];

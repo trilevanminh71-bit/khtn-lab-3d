@@ -12,6 +12,7 @@ import { useLabStore } from '../store/useLabStore';
 import { applyAssetOverrides, buildSceneForPlugin } from '../engines/sceneFactory';
 import { buildSandboxScene, type SandboxSceneHandle } from '../engines/sandboxSceneBuilder';
 import { equipmentById } from '../data/equipmentCatalog';
+import { EQUIP_DRAG_TYPE, takeOut } from '../components/SandboxPanel';
 import { getSolver } from '../engines/solverRegistry';
 import { generateHiddenParams, mulberry32, sessionSeed } from '../utils/randomizer';
 import { APP_CONFIG } from '../config/appConfig';
@@ -69,15 +70,13 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
           const r = useLabStore.getState().triggerInteraction(tag);
           useLabStore.getState().toast(r.ok ? 'success' : 'warning', r.message);
         },
-        onSnap: (snapId, tag) => {
+        onFreeMove: (tag, x, y, z) => {
           const s0 = useLabStore.getState();
-          if (s0.sandboxOn) {
-            // Kéo dụng cụ sang chỗ khác trên bàn (đổi chỗ hai dụng cụ)
-            const to = Number(snapId.split(':')[1]);
-            const from = Number(tag.split(':')[1]);
-            s0.moveSandboxItem(from, to);
-            return;
-          }
+          if (!s0.sandboxOn) return;
+          const r = s0.sandboxPlace(Number(tag.split(':')[1]), x, y, z);
+          if (r.message) s0.toast('success', r.message);
+        },
+        onSnap: (snapId) => {
           const r = useLabStore.getState().triggerInteraction(snapId);
           useLabStore.getState().toast(r.ok ? 'success' : 'warning', r.message);
         },
@@ -246,7 +245,24 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
 
   return (
     <div className="relative h-full w-full">
-      <div ref={ref} className="h-full w-full" />
+      <div
+        ref={ref}
+        className="h-full w-full"
+        onDragOver={(e) => {
+          // Thả thẻ dụng cụ từ tủ vào khung 3D (chỉ ở chế độ Thí nghiệm tự do)
+          if (sandboxOn && e.dataTransfer.types.includes(EQUIP_DRAG_TYPE)) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }
+        }}
+        onDrop={(e) => {
+          const id = e.dataTransfer.getData(EQUIP_DRAG_TYPE);
+          const def = equipmentById(id);
+          if (!sandboxOn || !def) return;
+          e.preventDefault();
+          takeOut(def, engineRef.current?.groundPoint(e.clientX, e.clientY) ?? undefined);
+        }}
+      />
       {hover && (
         <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-slate-900/85 px-3 py-1 text-sm text-white shadow">
           {hover}

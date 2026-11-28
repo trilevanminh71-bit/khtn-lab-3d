@@ -6,7 +6,7 @@ import { EQUIPMENT, equipmentById, sandboxConflicts, sandboxMissingPpe } from '.
 import { BUILTIN_PLUGINS } from '../../plugins/pluginRegistry';
 import { checkSubmission } from '../../utils/submitCheck';
 import { mulberry32 } from '../../utils/randomizer';
-import { advanceWorld, buretteReading, controlsFor, createWorld, doAction, flaskExcessMl, initState, microscopeSharpness, readoutsFor, sandboxAlerts, setControl } from '../sandboxSim';
+import { advanceWorld, buretteReading, childOn, controlsFor, createWorld, placeItem, removeFromWorld, type SandboxWorld, doAction, flaskExcessMl, initState, microscopeSharpness, readoutsFor, sandboxAlerts, setControl } from '../sandboxSim';
 
 describe('Tủ dụng cụ – Tự do thí nghiệm', () => {
   it('mã dụng cụ duy nhất, tham chiếu dụng cụ và bài học đều tồn tại', () => {
@@ -38,6 +38,7 @@ describe('Tủ dụng cụ – Tự do thí nghiệm', () => {
 
 describe('Mô phỏng thao tác dụng cụ (sandboxSim)', () => {
   const ppe = { goggles: true, gloves: true, labelCheck: true };
+  const mount = (w: SandboxWorld, items: string[], child: number, host: number): SandboxWorld => placeItem(w, items, child, 0, 0, 0, host).world;
   it('mọi dụng cụ có trạng thái & điều khiển hợp lệ, tiến thời gian không sinh NaN', () => {
     const items = EQUIPMENT.slice(0, 8).map((e) => e.id);
     let w = createWorld(items);
@@ -49,6 +50,9 @@ describe('Mô phỏng thao tác dụng cụ (sandboxSim)', () => {
   it('máng nghiêng: bi lăn, cổng quang đo thời gian chắn đúng d/v', () => {
     const items = ['mang-nghieng', 'bi-thep', 'cong-quang-dien', 'dong-ho-so'];
     let w = createWorld(items);
+    expect(doAction(w, items, 0, 'release', ppe).ok).toBe(false); // bi chưa đặt lên máng
+    w = mount(w, items, 1, 0);
+    w = mount(w, items, 2, 0);
     w = doAction(w, items, 0, 'release', ppe).world;
     for (let k = 0; k < 40; k++) w = advanceWorld(w, items, 0.05);
     const r = w.states[0];
@@ -59,7 +63,7 @@ describe('Mô phỏng thao tác dụng cụ (sandboxSim)', () => {
   });
   it('burette nhỏ giọt dần vào bình nón; tới điểm tương đương thì hồng bền; thiếu acid → kết tủa nâu', () => {
     const items = ['buret', 'binh-non', 'chai-kmno4', 'chai-h2so4'];
-    let w = createWorld(items);
+    let w = mount(createWorld(items), items, 1, 0);
     expect(doAction(w, items, 0, 'fill', ppe).ok).toBe(false); // chưa mở nắp chai
     w = setControl(w, items, 2, 'open', 1, ppe).world;
     w = setControl(w, items, 3, 'open', 1, ppe).world;
@@ -77,7 +81,7 @@ describe('Mô phỏng thao tác dụng cụ (sandboxSim)', () => {
     expect(flaskExcessMl(w.states[1])).toBeGreaterThan(0);
     // Không acid
     const items2 = ['buret', 'binh-non', 'chai-kmno4'];
-    let w2 = setControl(createWorld(items2), items2, 2, 'open', 1, ppe).world;
+    let w2 = setControl(mount(createWorld(items2), items2, 1, 0), items2, 2, 'open', 1, ppe).world;
     w2 = doAction(w2, items2, 0, 'fill', ppe).world;
     w2 = doAction(w2, items2, 1, 'sample', ppe).world;
     w2 = doAction(w2, items2, 0, 'drop', ppe).world;
@@ -88,6 +92,9 @@ describe('Mô phỏng thao tác dụng cụ (sandboxSim)', () => {
     const items = ['coc-thuy-tinh', 'den-con', 'nhiet-ke', 'luc-ke', 'qua-nang'];
     let w = createWorld(items);
     w = setControl(w, items, 1, 'on', 1, ppe).world;
+    expect(advanceWorld(w, items, 60).states[0].T).toBe(25); // cốc chưa đặt lên kiềng → không nóng
+    w = mount(w, items, 0, 1);
+    w = mount(w, items, 2, 0);
     w = advanceWorld(w, items, 60);
     expect(w.states[0].T).toBeGreaterThan(27);
     expect(w.states[0].T).toBeLessThan(35);
@@ -114,5 +121,34 @@ describe('Mô phỏng thao tác dụng cụ (sandboxSim)', () => {
     const r = setControl(w, items, 1, 'open', 1, noGloves);
     expect(r.message).toContain('găng tay');
     expect(sandboxAlerts(r.world, items, noGloves).some((a) => a.text.includes('găng tay'))).toBe(true);
+  });
+});
+
+describe('Di chuyển tự do & lắp ghép', () => {
+  it('đưa sát vị trí lắp thì tự khớp, kéo xa thì tháo; dụng cụ lắp trên đi theo; giới hạn mặt bàn', () => {
+    const items = ['den-con', 'coc-thuy-tinh', 'nhiet-ke'];
+    let w = createWorld(items);
+    expect(w.pos.every((p) => p[1] === 0)).toBe(true);
+    const lamp = w.pos[0];
+    let r = placeItem(w, items, 1, lamp[0] + 0.1, 0.3, lamp[2] - 0.05);
+    expect(r.mounted).toContain('kiềng');
+    w = r.world;
+    expect(w.pos[1]).toEqual([lamp[0], 0.225, lamp[2]]);
+    w = placeItem(w, items, 2, w.pos[1][0], 0, w.pos[1][2]).world;
+    expect(childOn(w, items, 'nhiet-ke', 1)).toBe(2);
+    // Dời đèn → cốc và nhiệt kế đi theo
+    w = placeItem(w, items, 0, lamp[0] + 0.5, 0, lamp[2]).world;
+    expect(w.pos[1][0]).toBeCloseTo(lamp[0] + 0.5, 6);
+    expect(w.pos[2][0]).toBeCloseTo(lamp[0] + 0.55, 6);
+    // Kéo cốc ra xa → tháo khỏi kiềng
+    r = placeItem(w, items, 1, -1.8, 0, -0.8);
+    expect(r.mounted).toBe('');
+    expect(r.world.links[1]).toBe(-1);
+    // Giới hạn mặt bàn
+    const out = placeItem(w, items, 0, 9, -3, 9).world.pos[0];
+    expect(out).toEqual([1.95, 0, 0.9]);
+    // Cất dụng cụ chủ → dụng cụ con đứng tự do, chỉ số đánh lại
+    const rm = removeFromWorld(w, 0);
+    expect(rm.links).toEqual([-1, 0]);
   });
 });

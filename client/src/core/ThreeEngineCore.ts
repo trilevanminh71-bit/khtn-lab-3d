@@ -20,6 +20,8 @@ export interface EngineCallbacks {
   onSnap(snapId: string, tag: string): void;
   /** Vật trượt theo trục (cổng quang điện…) → giá trị tham số mới */
   onSlide(param: string, value: number): void;
+  /** Kéo tự do (userData.freeDrag) xong → vị trí mới (toạ độ cảnh) */
+  onFreeMove?(tag: string, x: number, y: number, z: number): void;
   onHover(label: string | null): void;
   onPerf(stats: PerfStats): void;
   onQualityChange(level: number): void;
@@ -74,6 +76,8 @@ export class ThreeEngineCore {
   private down: { x: number; y: number; t: number; hit: THREE.Object3D | null } | null = null;
   private hovered: THREE.Object3D | null = null;
   private slide: { obj: THREE.Object3D; spec: SlideSpec; moved: boolean } | null = null;
+  /** Kéo tự do: mặt phẳng ngang (X-Z) hoặc giữ Shift để nâng/hạ (Y); camera tạm khóa xoay trong lúc kéo */
+  private free: { obj: THREE.Object3D; mode: 'xz' | 'y'; prev: THREE.Vector3 | null; moved: boolean } | null = null;
   private paused = false;
   private pendingStep = 0;
 
@@ -369,6 +373,13 @@ export class ThreeEngineCore {
       this.renderer.domElement.setPointerCapture(e.pointerId);
       return;
     }
+    if (hit && hit.userData.freeDrag) {
+      this.free = { obj: hit, mode: 'xz', prev: null, moved: false };
+      hit.userData.dragging = true;
+      this.controls.enabled = false;
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+      return;
+    }
     if (hit && hit.userData.draggable) {
       const snapped = this.main?.handle.snapPoints.find((s) => s.filled && s.accepts === hit.userData.tag);
       if (snapped) return; // đã gắn rồi thì không kéo ra nữa
@@ -388,6 +399,37 @@ export class ThreeEngineCore {
       this.slide.moved = true;
       this.raycaster.setFromCamera(this.pointer, this.camera);
       this.cb.onSlide(this.slide.spec.param, this.slideValue(this.slide.obj, this.slide.spec));
+      return;
+    }
+    if (this.free) {
+      const f = this.free;
+      if (this.down && !f.moved && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 5) return;
+      f.moved = true;
+      this.renderer.domElement.style.cursor = 'grabbing';
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const mode = e.shiftKey ? 'y' : 'xz';
+      const pos = f.obj.position;
+      let plane: THREE.Plane;
+      if (mode === 'xz') plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -pos.y);
+      else {
+        const n = new THREE.Vector3().subVectors(this.camera.position, pos).setY(0);
+        if (n.lengthSq() < 1e-6) n.set(0, 0, 1);
+        plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), pos);
+      }
+      const p = new THREE.Vector3();
+      if (!this.raycaster.ray.intersectPlane(plane, p)) return;
+      if (f.mode !== mode || !f.prev) {
+        f.mode = mode;
+        f.prev = p;
+        return;
+      }
+      const d = p.clone().sub(f.prev);
+      f.prev = p;
+      const b = (f.obj.userData.bounds ?? { minX: -2, maxX: 2, minY: 0, maxY: 1, minZ: -0.95, maxZ: 0.95 }) as Record<string, number>;
+      if (mode === 'xz') {
+        pos.x = Math.min(b.maxX, Math.max(b.minX, pos.x + d.x));
+        pos.z = Math.min(b.maxZ, Math.max(b.minZ, pos.z + d.z));
+      } else pos.y = Math.min(b.maxY, Math.max(b.minY, pos.y + d.y));
       return;
     }
     if (this.drag) {
@@ -411,6 +453,22 @@ export class ThreeEngineCore {
   private onPointerUp = (e: PointerEvent): void => {
     const down = this.down;
     this.down = null;
+    if (this.free) {
+      const f = this.free;
+      this.free = null;
+      f.obj.userData.dragging = false;
+      this.controls.enabled = true;
+      this.renderer.domElement.style.cursor = 'grab';
+      try {
+        this.renderer.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* con trỏ đã được giải phóng */
+      }
+      const tag = String(f.obj.userData.tag);
+      if (f.moved) this.cb.onFreeMove?.(tag, f.obj.position.x, f.obj.position.y, f.obj.position.z);
+      else this.cb.onInteract(tag, String(f.obj.userData.label ?? ''));
+      return;
+    }
     if (this.slide) {
       const { moved } = this.slide;
       this.slide = null;
@@ -451,6 +509,18 @@ export class ThreeEngineCore {
       this.cb.onInteract(tag, String(down.hit.userData.label ?? ''));
     }
   };
+
+  /** Điểm trên mặt bàn (y = 0) dưới vị trí màn hình (clientX, clientY) — dùng khi thả dụng cụ từ tủ vào khung 3D */
+  groundPoint(clientX: number, clientY: number): { x: number; z: number } | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const w = this.compare ? rect.width / 2 : rect.width;
+    const x = clientX - rect.left;
+    if (x < 0 || x > w) return null;
+    this.pointer.set((x / w) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const p = new THREE.Vector3();
+    return this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p) ? { x: p.x, z: p.z } : null;
+  }
 
   /** Điểm gắn gần nhất (theo mặt phẳng ngang) nhận vật đang kéo, bán kính 0,45 */
   private findSnap(obj: THREE.Object3D): SnapPoint | null {

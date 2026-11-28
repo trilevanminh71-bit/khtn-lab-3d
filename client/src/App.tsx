@@ -17,6 +17,7 @@ import { SceneDock } from './components/SceneDock';
 import { ConfirmDialogModal } from './components/ConfirmDialogModal';
 import { PinGuardModal } from './components/PinGuardModal';
 import { OnboardingTour } from './components/OnboardingTour';
+import { ModeChooser } from './components/ModeChooser';
 import { KhktDemoOverlay } from './components/KhktDemoOverlay';
 import { DevDebugPanel } from './components/DevDebugPanel';
 import { LabCanvasHost } from './core/LabCanvasHost';
@@ -49,6 +50,7 @@ const closeTutor = (): void => useLabStore.getState().setTutorOpen(false);
 
 export default function App() {
   const modal = useLabStore((s) => s.modal);
+  const modeChooser = useLabStore((s) => s.modeChooser);
   const settings = useLabStore((s) => s.settings);
   const toasts = useLabStore((s) => s.toasts);
   const khkt = useLabStore((s) => s.khktMode);
@@ -190,7 +192,8 @@ export default function App() {
       {modal === 'lessons' && <LessonPicker />}
       <ConfirmDialogModal />
       <PinGuardModal />
-      {settings.showOnboarding && <OnboardingTour />}
+      {modeChooser && <ModeChooser />}
+      {settings.showOnboarding && !modeChooser && <OnboardingTour />}
 
       <Suspense fallback={<div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 text-white backdrop-blur-sm">Đang tải…</div>}>
         {modal === 'guide' && <UserGuideModal />}

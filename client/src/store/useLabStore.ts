@@ -5,7 +5,7 @@
  * KHKT Mode, phiên PIN, Auto-Adaptive FPS (mức chất lượng), modal đang mở.
  */
 import { SANDBOX_SLOTS } from '../data/equipmentCatalog';
-import { advanceWorld, createWorld, doAction, setControl, syncWorld, wipeSpill, type SandboxWorld } from '../engines/sandboxSim';
+import { advanceWorld, createWorld, doAction, freeSpot, placeItem, removeFromWorld, setControl, syncWorld, wipeSpill, type SandboxWorld } from '../engines/sandboxSim';
 import { valueIssue } from '../utils/trialTable';
 import { create } from 'zustand';
 import type {
@@ -168,15 +168,22 @@ export interface LabState {
   sandboxWorld: SandboxWorld;
   /** Chỗ đang chọn để điều khiển */
   sandboxSel: number | null;
+  /** Màn hình chọn chế độ (tự do / bài tập / giáo viên) — hiện khi mở ứng dụng */
+  modeChooser: boolean;
 
   setPlugins(list: LabPluginDef[]): void;
   setSandbox(on: boolean): void;
-  addSandboxItem(id: string): ActionResult;
+  /** Lấy dụng cụ từ tủ ra bàn; at = điểm thả trên mặt bàn (kéo thả vào khung 3D) */
+  addSandboxItem(id: string, at?: { x: number; z: number }): ActionResult;
   removeSandboxItem(index: number): void;
   replaceSandboxItem(index: number, id: string): void;
   clearSandbox(): void;
-  moveSandboxItem(from: number, to: number): void;
+  /** Di chuyển dụng cụ tới (x, y, z) — tự khớp vị trí lắp ghép gần nhất; forceHost = lắp vào dụng cụ đó */
+  sandboxPlace(slot: number, x: number, y: number, z: number, forceHost?: number): ActionResult;
+  /** Đưa dụng cụ về chỗ trống gợi ý trên bàn (tháo khỏi vị trí lắp) */
+  resetSandboxPos(slot: number): void;
   selectSandbox(i: number | null): void;
+  setModeChooser(on: boolean): void;
   sandboxControl(slot: number, key: string, value: number): ActionResult;
   sandboxAction(slot: number, key: string): ActionResult;
   /** Tiến thời gian mô phỏng (giây thực); force = bỏ qua trạng thái Dừng (nút Từng bước) */
@@ -333,24 +340,32 @@ export const useLabStore = create<LabState>((set, get) => ({
   sandboxItems: [],
   sandboxWorld: createWorld([]),
   sandboxSel: null,
+  modeChooser: true,
 
   setSandbox(on) {
     logAction(on ? 'sandbox-on' : 'sandbox-off');
     // Bỏ lần đo đang chờ ghi để không lẫn sang chế độ khác; về góc nhìn chuẩn của cảnh mới
     set({ sandboxOn: on, pendingTrial: null, simPaused: false, cameraView: { kind: 'overview', tag: null, nonce: get().cameraView.nonce } });
   },
-  addSandboxItem(id) {
+  addSandboxItem(id, at) {
     const st = get();
     if (st.sandboxItems.length >= SANDBOX_SLOTS) return { ok: false, message: `Bàn đã đủ ${SANDBOX_SLOTS} dụng cụ — gỡ bớt hoặc bấm Đổi ở một chỗ.` };
     logAction('sandbox-add', id);
     const items = [...st.sandboxItems, id];
-    set({ sandboxItems: items, sandboxWorld: syncWorld(st.sandboxWorld, st.sandboxItems, items), sandboxSel: items.length - 1 });
-    return { ok: true, message: 'Đã đặt lên bàn.' };
+    let world = syncWorld(st.sandboxWorld, st.sandboxItems, items);
+    let message = 'Đã đặt lên bàn.';
+    if (at) {
+      const r = placeItem(world, items, items.length - 1, at.x, 0, at.z);
+      world = r.world;
+      if (r.mounted) message = `Đã lắp ${r.mounted}.`;
+    }
+    set({ sandboxItems: items, sandboxWorld: world, sandboxSel: items.length - 1 });
+    return { ok: true, message };
   },
   removeSandboxItem(index) {
     logAction('sandbox-remove', String(index));
     const st = get();
-    set({ sandboxItems: st.sandboxItems.filter((_, i) => i !== index), sandboxWorld: { ...st.sandboxWorld, states: st.sandboxWorld.states.filter((_, i) => i !== index) }, sandboxSel: null });
+    set({ sandboxItems: st.sandboxItems.filter((_, i) => i !== index), sandboxWorld: removeFromWorld(st.sandboxWorld, index), sandboxSel: null });
   },
   replaceSandboxItem(index, id) {
     logAction('sandbox-replace', `${index}:${id}`);
@@ -362,19 +377,29 @@ export const useLabStore = create<LabState>((set, get) => ({
     logAction('sandbox-clear');
     set({ sandboxItems: [], sandboxWorld: createWorld([]), sandboxSel: null });
   },
-  moveSandboxItem(from, to) {
+  sandboxPlace(slot, x, y, z, forceHost = -1) {
     const st = get();
-    const n = st.sandboxItems.length;
-    if (from === to || from < 0 || from >= n || to < 0 || to >= SANDBOX_SLOTS) return;
-    const t2 = Math.min(to, n - 1);
-    const items = [...st.sandboxItems];
-    const states = [...st.sandboxWorld.states];
-    [items[from], items[t2]] = [items[t2], items[from]];
-    [states[from], states[t2]] = [states[t2], states[from]];
-    logAction('sandbox-move', `${from}>${t2}`);
-    set({ sandboxItems: items, sandboxWorld: { ...st.sandboxWorld, states }, sandboxSel: t2 });
+    if (!st.sandboxItems[slot]) return { ok: false, message: 'Không có dụng cụ này.' };
+    const wasLinked = st.sandboxWorld.links[slot] ?? -1;
+    const r = placeItem(st.sandboxWorld, st.sandboxItems, slot, x, y, z, forceHost);
+    set({ sandboxWorld: r.world, sandboxSel: slot });
+    if (r.mounted && r.world.links[slot] !== wasLinked) {
+      logAction('sandbox-mount', `${st.sandboxItems[slot]}>${st.sandboxItems[r.world.links[slot]]}`);
+      return { ok: true, message: `Đã lắp ${r.mounted}.` };
+    }
+    if (!r.mounted && wasLinked >= 0) return { ok: true, message: 'Đã tháo ra, dụng cụ đứng tự do.' };
+    return { ok: true, message: '' };
+  },
+  resetSandboxPos(slot) {
+    const st = get();
+    const others = st.sandboxWorld.pos.filter((_, i) => i !== slot);
+    const [x, y, z] = freeSpot(others);
+    get().sandboxPlace(slot, x, y, z);
+    const w = get().sandboxWorld;
+    if (w.links[slot] >= 0) set({ sandboxWorld: { ...w, links: w.links.map((l, i) => (i === slot ? -1 : l)) } });
   },
   selectSandbox: (i) => set({ sandboxSel: i }),
+  setModeChooser: (on) => set({ modeChooser: on }),
   sandboxControl(slot, key, value) {
     const st = get();
     const r = setControl(st.sandboxWorld, st.sandboxItems, slot, key, value, st.ppe);
@@ -396,7 +421,9 @@ export const useLabStore = create<LabState>((set, get) => ({
   setSandboxSpeed: (x) => set({ sandboxWorld: { ...get().sandboxWorld, speed: x } }),
   resetSandboxWorld() {
     logAction('sandbox-reset');
-    set({ sandboxWorld: createWorld(get().sandboxItems) });
+    const w = get().sandboxWorld;
+    // Đặt lại trạng thái vận hành, giữ nguyên vị trí và cách lắp ghép trên bàn
+    set({ sandboxWorld: { ...createWorld(get().sandboxItems, w.pos), links: [...w.links] } });
   },
   wipeSandboxSpill: () => set({ sandboxWorld: wipeSpill(get().sandboxWorld) }),
 

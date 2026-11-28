@@ -12,6 +12,8 @@
  *  - Kính hiển vi: độ phóng đại = vật kính × thị kính 10×; vật kính lớn có độ sâu trường ảnh hẹp → chỉ chỉnh ốc vi cấp.
  *  - Đĩa petri: sinh trưởng logistic, tốc độ phụ thuộc nhiệt độ (tối ưu ~37 °C).
  *  - Amylase phân giải tinh bột theo thời gian; tinh bột + iodine → xanh tím.
+ * Vị trí 3D tự do: mỗi dụng cụ có toạ độ (x, y, z) trên bàn; đưa sát vị trí lắp ghép thật (MOUNTS) thì tự khớp và "lắp vào"
+ * dụng cụ chủ (bình dưới vòi burette, cốc trên kiềng đèn cồn, tiêu bản trên bàn kính…). Hiện tượng chỉ xảy ra khi lắp đúng.
  * Chế độ này KHÔNG tạo TrialRecord, không ghi vào bảng số liệu và không ảnh hưởng bài nộp chấm điểm.
  */
 import type { PpeItem } from '../types/lab';
@@ -32,6 +34,113 @@ export interface SandboxWorld {
   /** Thể tích dung dịch đổ ra bàn (mL) và mức nguy hiểm (0 nước, 1 thuốc thử, 2 acid/oxi hóa mạnh) */
   spill: number;
   spillHazard: number;
+  /** Toạ độ [x, y, z] (m) của từng dụng cụ trên bàn */
+  pos: number[][];
+  /** Chỗ của dụng cụ chủ mà dụng cụ này đang lắp vào (−1 = đứng tự do) */
+  links: number[];
+}
+
+/** Vị trí lắp ghép thật: dụng cụ con đặt sát (bán kính MOUNT_RADIUS) điểm lắp của dụng cụ chủ → tự khớp */
+export interface MountDef {
+  child: string;
+  host: string;
+  offset: [number, number, number];
+  label: string;
+}
+export const MOUNTS: MountDef[] = [
+  { child: 'binh-non', host: 'buret', offset: [0.02, 0.02, 0], label: 'dưới vòi burette' },
+  { child: 'coc-thuy-tinh', host: 'den-con', offset: [0, 0.225, 0], label: 'trên kiềng đèn cồn' },
+  { child: 'nhiet-ke', host: 'coc-thuy-tinh', offset: [0.05, 0.01, 0], label: 'trong cốc thủy tinh' },
+  { child: 'lam-kinh', host: 'kinh-hien-vi', offset: [0, 0.155, 0.02], label: 'trên bàn kính hiển vi' },
+  { child: 'bi-thep', host: 'mang-nghieng', offset: [-0.3, 0.06, 0], label: 'ở đầu máng nghiêng' },
+  { child: 'cong-quang-dien', host: 'mang-nghieng', offset: [0, 0, 0.14], label: 'trên máng nghiêng' },
+  { child: 'ong-nho-giot', host: 'ong-nghiem', offset: [0, 0.22, 0], label: 'trên giá ống nghiệm' },
+  { child: 'ong-nho-giot', host: 'lam-kinh', offset: [0, 0.06, 0], label: 'trên lam kính' }
+];
+export const MOUNT_RADIUS = 0.3;
+/** Giới hạn mặt bàn (m) — không cho dụng cụ ra ngoài bàn hay xuyên mặt bàn */
+export const BENCH_BOUNDS = { minX: -1.95, maxX: 1.95, minY: 0, maxY: 1, minZ: -0.9, maxZ: 0.9 };
+const GRID: Array<[number, number]> = [];
+for (const z of [0.35, -0.5]) for (const x of [-1.5, -0.5, 0.5, 1.5]) GRID.push([x, z]);
+for (const z of [0.75, -0.1]) for (const x of [-1, 0, 1]) GRID.push([x, z]);
+
+/** Chỗ trống đầu tiên trên lưới gợi ý (cách mọi dụng cụ khác ≥ 0,4 m) */
+export function freeSpot(pos: number[][]): number[] {
+  const free = GRID.find(([x, z]) => pos.every((p) => Math.hypot(p[0] - x, p[2] - z) >= 0.4));
+  const [x, z] = free ?? GRID[pos.length % GRID.length];
+  return [x, 0, z];
+}
+/** Chỗ của dụng cụ `childId` đang lắp vào dụng cụ ở chỗ hostSlot (−1 nếu không có) */
+export function childOn(w: SandboxWorld, items: string[], childId: string, hostSlot: number): number {
+  return items.findIndex((id, k) => id === childId && (w.links?.[k] ?? -1) === hostSlot);
+}
+/** Các vị trí lắp có thể cho dụng cụ ở chỗ slot (với dụng cụ chủ đang có trên bàn) */
+export function mountOptions(items: string[], slot: number): Array<{ host: number; def: MountDef }> {
+  const out: Array<{ host: number; def: MountDef }> = [];
+  MOUNTS.forEach((def) => {
+    if (def.child !== items[slot]) return;
+    items.forEach((id, j) => {
+      if (j !== slot && id === def.host) out.push({ host: j, def });
+    });
+  });
+  return out;
+}
+function dist2d(a: number[] | undefined, b: number[] | undefined): number {
+  return a && b ? Math.hypot(a[0] - b[0], a[2] - b[2]) : Infinity;
+}
+
+/**
+ * Đặt dụng cụ ở chỗ `slot` tới (x, y, z): giới hạn trong mặt bàn, tự khớp vào điểm lắp gần nhất (nếu có),
+ * dụng cụ đang lắp trên nó di chuyển theo. forceHost = lắp thẳng vào dụng cụ chủ đó (nút "Lắp").
+ * Trả về nhãn vị trí lắp (rỗng nếu đứng tự do).
+ */
+export function placeItem(
+  world: SandboxWorld,
+  items: string[],
+  slot: number,
+  x: number,
+  y: number,
+  z: number,
+  forceHost = -1
+): { world: SandboxWorld; mounted: string } {
+  const b = BENCH_BOUNDS;
+  const w = cloneWorld(world);
+  let p = [
+    Math.min(b.maxX, Math.max(b.minX, x)),
+    Math.min(b.maxY, Math.max(b.minY, y)),
+    Math.min(b.maxZ, Math.max(b.minZ, z))
+  ];
+  const free = [...p];
+  let link = -1;
+  let mounted = '';
+  let best = MOUNT_RADIUS;
+  for (const { host, def } of mountOptions(items, slot)) {
+    if (w.links[host] === slot) continue; // không lắp vòng
+    const hp = w.pos[host];
+    const target = [hp[0] + def.offset[0], hp[1] + def.offset[1], hp[2] + def.offset[2]];
+    const d = forceHost === host ? -1 : dist2d(free, target);
+    if (d < best) {
+      best = d;
+      link = host;
+      mounted = def.label;
+      p = target;
+    }
+  }
+  const old = w.pos[slot] ?? p;
+  const delta = [p[0] - old[0], p[1] - old[1], p[2] - old[2]];
+  w.pos[slot] = p;
+  w.links[slot] = link;
+  // Dụng cụ đang lắp trên nó đi theo (nhiều tầng: nhiệt kế trong cốc trên kiềng)
+  const moveChildren = (host: number, depth: number): void => {
+    if (depth > 3) return;
+    w.links.forEach((l, k) => {
+      if (l !== host || k === slot) return;
+      w.pos[k] = [w.pos[k][0] + delta[0], w.pos[k][1] + delta[1], w.pos[k][2] + delta[2]];
+      moveChildren(k, depth + 1);
+    });
+  };
+  moveChildren(slot, 0);
+  return { world: w, mounted };
 }
 
 export type SbControl =
@@ -134,15 +243,50 @@ export function initState(id: string): SbState {
   }
 }
 
-export function createWorld(items: string[]): SandboxWorld {
-  return { t: 0, running: true, speed: 1, states: items.map(initState), spill: 0, spillHazard: 0 };
+export function createWorld(items: string[], pos?: number[][]): SandboxWorld {
+  const p: number[][] = [];
+  items.forEach((_, i) => p.push(pos?.[i] ?? freeSpot(p)));
+  return {
+    t: 0,
+    running: true,
+    speed: 1,
+    states: items.map(initState),
+    spill: 0,
+    spillHazard: 0,
+    pos: p,
+    links: items.map(() => -1)
+  };
 }
 
 /** Đồng bộ trạng thái khi danh sách dụng cụ thay đổi (giữ trạng thái dụng cụ còn ở nguyên chỗ) */
 export function syncWorld(world: SandboxWorld, prevItems: string[], items: string[]): SandboxWorld {
+  const pos: number[][] = [];
+  const links: number[] = [];
+  items.forEach((id, i) => {
+    const same = prevItems[i] === id && world.pos[i];
+    pos.push(same ? world.pos[i] : freeSpot(pos.concat(world.pos.slice(i + 1))));
+    links.push(same ? (world.links[i] ?? -1) : -1);
+  });
+  // Dụng cụ chủ bị thay → các dụng cụ đang lắp vào nó trở thành đứng tự do
+  links.forEach((l, i) => {
+    if (l >= 0 && (l >= items.length || prevItems[l] !== items[l])) links[i] = -1;
+  });
   return {
     ...world,
+    pos,
+    links,
     states: items.map((id, i) => (prevItems[i] === id && world.states[i] ? world.states[i] : initState(id)))
+  };
+}
+
+/** Gỡ dụng cụ ở chỗ `index` (cất vào tủ): đánh lại chỉ số liên kết, dụng cụ đang lắp vào nó đứng tự do */
+export function removeFromWorld(world: SandboxWorld, index: number): SandboxWorld {
+  const keep = (_: unknown, i: number): boolean => i !== index;
+  return {
+    ...world,
+    states: world.states.filter(keep),
+    pos: world.pos.filter(keep),
+    links: world.links.filter(keep).map((l) => (l === index ? -1 : l > index ? l - 1 : l))
   };
 }
 
@@ -268,7 +412,11 @@ export function controlsFor(id: string): SbControl[] {
 /* ------------------------------- Tiện ích ------------------------------- */
 
 function cloneWorld(w: SandboxWorld): SandboxWorld {
-  return { ...w, states: w.states.map((s) => ({ ...s })) };
+  return { ...w, states: w.states.map((s) => ({ ...s })), pos: w.pos.map((p) => [...p]), links: [...w.links] };
+}
+/** Chai `bottleId` đang mở và ở gần (≤ r m) dụng cụ ở chỗ slot */
+function openNear(w: SandboxWorld, items: string[], bottleId: string, slot: number, r: number): boolean {
+  return items.some((id, k) => id === bottleId && w.states[k]?.open === 1 && dist2d(w.pos[k], w.pos[slot]) <= r);
 }
 const idx = (items: string[], id: string): number => items.indexOf(id);
 function bottleOpen(items: string[], w: SandboxWorld, id: string): boolean {
@@ -307,8 +455,8 @@ export function buretteReading(s: SbState): number {
 }
 
 /** Thêm một lượng KMnO₄ (mL) từ burette vào bình nón (hoặc ra bàn nếu không có bình) */
-function deliverKmno4(w: SandboxWorld, items: string[], ml: number): void {
-  const fi = idx(items, 'binh-non');
+function deliverKmno4(w: SandboxWorld, items: string[], buretSlot: number, ml: number): void {
+  const fi = childOn(w, items, 'binh-non', buretSlot);
   if (fi < 0) {
     addSpill(w, ml, 2);
     return;
@@ -357,7 +505,7 @@ export function setControl(
     case 'den-con:on':
       if (v && s.fuel <= 0)
         return { world, ok: false, message: 'Đèn hết cồn — cần thêm cồn (khi đèn đã tắt và nguội).' };
-      if (v && bottleOpen(items, w, 'chai-ethanol'))
+      if (v && openNear(w, items, 'chai-ethanol', slot, 0.6))
         msg = 'Nguy hiểm: chai cồn đang mở gần ngọn lửa — đậy nắp chai cồn trước!';
       else msg = v ? 'Đã châm đèn cồn bằng que diêm.' : 'Đã đậy nắp để tắt đèn (không thổi).';
       if (v) msg += ppeNote(id, ppe);
@@ -375,7 +523,8 @@ export function setControl(
       break;
     case 'buret:valve':
       if (v > 0 && s.left <= 0) msg = 'Burette chưa có dung dịch — bấm "Nạp KMnO₄ tới vạch 0".';
-      else if (v > 0 && idx(items, 'binh-non') < 0) msg = 'Chưa có bình hứng bên dưới — dung dịch sẽ chảy ra bàn!';
+      else if (v > 0 && childOn(w, items, 'binh-non', slot) < 0)
+        msg = 'Chưa có bình nón đặt dưới vòi burette — dung dịch sẽ chảy ra bàn! Kéo bình nón tới chân burette.';
       else if (v === 3) msg = 'Mở hết khóa chỉ dùng khi tráng/xả burette; khi chuẩn độ nên nhỏ từng giọt.';
       break;
     case 'binh-non:cat':
@@ -411,7 +560,9 @@ export function doAction(
   const no = (message: string): SbActResult => ({ world, ok: false, message });
   switch (`${id}:${key}`) {
     case 'mang-nghieng:release':
-      if (idx(items, 'bi-thep') < 0) return no('Cần đặt "Viên bi thép" lên bàn để thả trên máng.');
+      if (idx(items, 'bi-thep') < 0) return no('Cần lấy "Viên bi thép" từ tủ ra bàn.');
+      if (childOn(w, items, 'bi-thep', slot) < 0)
+        return no('Đặt viên bi lên đầu máng trước: kéo viên bi tới máng hoặc bấm "Lắp" ở viên bi.');
       if (s.rolling) return no('Bi đang lăn.');
       if (s.s >= RAIL_LEN - 0.01) return no('Bi đang ở cuối máng — bấm "Đưa bi về đầu máng".');
       s.rolling = 1;
@@ -504,9 +655,9 @@ export function doAction(
       if (s.valve > 0) return no('Đang mở khóa — chuyển về "Đóng" rồi mới nhỏ từng giọt.');
       s.left -= DROP_ML;
       s.drops += 1;
-      deliverKmno4(w, items, DROP_ML);
+      deliverKmno4(w, items, slot, DROP_ML);
       return ok(
-        idx(items, 'binh-non') < 0
+        childOn(w, items, 'binh-non', slot) < 0
           ? 'Giọt rơi ra bàn — đặt bình nón bên dưới!'
           : 'Một giọt KMnO₄ rơi vào bình — lắc tròn và quan sát màu.'
       );
@@ -553,8 +704,9 @@ export function doAction(
     case 'ong-nho-giot:drip': {
       if (s.drops <= 0) return no('Ống nhỏ giọt đang rỗng — bóp hút dung dịch trước.');
       s.drops -= 1;
-      const ti = idx(items, 'ong-nghiem');
-      const li = idx(items, 'lam-kinh');
+      const host = w.links[slot] ?? -1;
+      const ti = items[host] === 'ong-nghiem' ? host : -1;
+      const li = items[host] === 'lam-kinh' ? host : -1;
       if (ti >= 0) {
         const t = w.states[ti];
         if (s.src === 2) t[`i${t.sel}`] += 1;
@@ -568,7 +720,7 @@ export function doAction(
       }
       if (li >= 0 && s.src === 1) return doAction(w, items, li, 'water', ppe);
       addSpill(w, DROP_ML, s.src >= 2 ? 1 : 0);
-      return ok('Không có ống nghiệm/lam kính để hứng — giọt rơi ra bàn.');
+      return ok('Ống nhỏ giọt chưa đặt trên ống nghiệm/lam kính — giọt rơi ra bàn. Kéo ống tới dụng cụ cần nhỏ.');
     }
     default:
       return no('Thao tác chưa hỗ trợ.');
@@ -594,10 +746,8 @@ export function advanceWorld(world: SandboxWorld, items: string[], dt: number): 
     const i = idx(items, id);
     return i >= 0 ? w.states[i] : undefined;
   };
-  const lamp = at('den-con');
-  const flameOn = !!lamp && lamp.on === 1 && lamp.fuel > 0;
-  const gate = at('cong-quang-dien');
   const clock = at('dong-ho-so');
+  const lampLit = (k: number): boolean => items[k] === 'den-con' && w.states[k]?.on === 1 && w.states[k].fuel > 0;
 
   items.forEach((id, i) => {
     const s = w.states[i];
@@ -616,6 +766,7 @@ export function advanceWorld(world: SandboxWorld, items: string[], dt: number): 
           s.rolling = 0;
         }
         // Bi chắn tia cổng quang: thời gian chắn = d / v tại cổng
+        const gate = w.states[childOn(w, items, 'cong-quang-dien', i)];
         if (gate && s0 < s.gate && s1 >= s.gate) {
           const vg = Math.sqrt(v0 * v0 + 2 * a * (s.gate - s0));
           s.tGate = vg > 0 ? BALL_D / vg : 0;
@@ -674,6 +825,8 @@ export function advanceWorld(world: SandboxWorld, items: string[], dt: number): 
         break;
       }
       case 'coc-thuy-tinh': {
+        // Chỉ được đun khi cốc đặt trên kiềng của đèn cồn đang cháy
+        const flameOn = lampLit(w.links[i] ?? -1);
         const P = flameOn ? 60 : 0;
         const m = Math.max(1, s.vol) / 1000;
         if (s.vol > 1) {
@@ -691,12 +844,13 @@ export function advanceWorld(world: SandboxWorld, items: string[], dt: number): 
         break;
       }
       case 'nhiet-ke': {
-        const target = at('coc-thuy-tinh')?.T ?? AMBIENT_C;
+        const h = w.links[i] ?? -1;
+        const target = items[h] === 'coc-thuy-tinh' ? w.states[h].T : AMBIENT_C;
         s.T += (target - s.T) * (1 - Math.exp(-dt / 6));
         break;
       }
       case 'den-con':
-        if (flameOn) s.fuel = Math.max(0, s.fuel - 0.02 * dt);
+        if (lampLit(i)) s.fuel = Math.max(0, s.fuel - 0.02 * dt);
         if (s.fuel <= 0) s.on = 0;
         break;
       case 'buret': {
@@ -709,7 +863,7 @@ export function advanceWorld(world: SandboxWorld, items: string[], dt: number): 
         const ml = Math.min(s.left, n * DROP_ML);
         s.left -= ml;
         s.drops += Math.round(ml / DROP_ML);
-        deliverKmno4(w, items, ml);
+        deliverKmno4(w, items, i, ml);
         break;
       }
       case 'binh-non': {
@@ -854,7 +1008,6 @@ export function sandboxAlerts(world: SandboxWorld, items: string[], ppe: Record<
       slot: -1
     });
   }
-  const lampOn = (world.states[idx(items, 'den-con')]?.on ?? 0) === 1;
   items.forEach((id, i) => {
     const s = world.states[i];
     if (!s) return;
@@ -872,11 +1025,15 @@ export function sandboxAlerts(world: SandboxWorld, items: string[], ppe: Record<
       case 'den-con':
         if (s.on && s.fuel < 10) add('info', 'Đèn sắp hết cồn.');
         if (s.on && !ppe.goggles) add('warn', 'Đèn cồn đang cháy mà chưa đeo kính bảo hộ.');
+        if (s.on && childOn(world, items, 'coc-thuy-tinh', i) < 0)
+          add('info', 'Đèn đang cháy nhưng chưa có cốc trên kiềng — đậy nắp nếu chưa dùng.');
         break;
       case 'buret':
         if (s.valve > 0 && s.left <= 0) add('info', 'Burette đã hết dung dịch — khóa van lại.');
+        if (s.valve > 0 && s.left > 0 && childOn(world, items, 'binh-non', i) < 0)
+          add('danger', 'Van burette đang mở mà không có bình hứng — khóa van ngay!');
         if (s.valve >= 2) {
-          const f = world.states[idx(items, 'binh-non')];
+          const f = world.states[childOn(world, items, 'binh-non', i)];
           if (f && f.sample > 0 && flaskReducerMl(f) - f.kmno4 < 1.5)
             add('warn', 'Sắp tới điểm tương đương — chuyển sang nhỏ từng giọt và lắc đều.');
         }
@@ -903,7 +1060,10 @@ export function sandboxAlerts(world: SandboxWorld, items: string[], ppe: Record<
         break;
       default:
         if (BOTTLES.includes(id) && s.open) {
-          if (id === 'chai-ethanol' && lampOn) add('danger', 'Chai cồn đang mở gần ngọn lửa — đậy nắp ngay!');
+          const lampNear = items.some(
+            (x, k) => x === 'den-con' && world.states[k]?.on === 1 && dist2d(world.pos[k], world.pos[i]) <= 0.6
+          );
+          if (id === 'chai-ethanol' && lampNear) add('danger', 'Chai cồn đang mở gần ngọn lửa — đậy nắp ngay!');
           const miss = missingPpeFor(id, ppe);
           if (miss.length) add('warn', `Đang mở ${equipmentById(id)?.name ?? id} khi chưa có ${miss.join(', ')}.`);
           if (s.openFor > 120) add('info', `${equipmentById(id)?.name ?? id} mở đã lâu — đậy nắp khi không dùng.`);

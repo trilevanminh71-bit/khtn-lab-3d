@@ -11,7 +11,15 @@
  */
 import * as THREE from 'three';
 import { equipmentById, SANDBOX_SLOTS } from '../data/equipmentCatalog';
-import { AMBIENT_C, flaskExcessMl, RAIL_LEN, type SandboxWorld, type SbState } from './sandboxSim';
+import {
+  AMBIENT_C,
+  BENCH_BOUNDS,
+  childOn,
+  flaskExcessMl,
+  RAIL_LEN,
+  type SandboxWorld,
+  type SbState
+} from './sandboxSim';
 import {
   box,
   cyl,
@@ -26,8 +34,7 @@ import {
   sphere,
   tagObject,
   type SceneHandle,
-  type SlideSpec,
-  type SnapPoint
+  type SlideSpec
 } from './sceneKit';
 
 /** Vị trí chỗ đặt trên bàn: 2 hàng × 4 cột */
@@ -187,16 +194,14 @@ function buildEquipment(id: string, ctx: Ctx): Built {
         g,
         apply: (s, _w, items) => {
           ang = s.angle;
-          ball.visible = items.includes('bi-thep');
-          gate.visible = items.includes('cong-quang-dien');
+          // Bi và cổng quang chỉ hiện trên máng khi đã được lắp vào máng
+          ball.visible = childOn(_w, items, 'bi-thep', ctx.slot) >= 0;
+          const gi = childOn(_w, items, 'cong-quang-dien', ctx.slot);
+          gate.visible = gi >= 0;
           gate.position.x = -RAIL_LEN + s.gate;
           spin = s.rolling ? s.v : 0;
           sPos = s.s;
-          ledM.color.set(
-            items.includes('cong-quang-dien') && _w.states[items.indexOf('cong-quang-dien')]?.flash > 0.3
-              ? '#ff3b3b'
-              : '#7f1d1d'
-          );
+          ledM.color.set(gi >= 0 && _w.states[gi]?.flash > 0.3 ? '#ff3b3b' : '#7f1d1d');
         },
         tick: (dt) => {
           const cur = -rail.rotation.z;
@@ -221,8 +226,7 @@ function buildEquipment(id: string, ctx: Ctx): Built {
         apply: (s, _w, items) => {
           x = s.x;
           v = s.v;
-          // Khi có máng nghiêng, viên bi được dùng trên máng
-          ball.visible = !items.includes('mang-nghieng');
+          ball.visible = items.length > 0;
         },
         tick: (dt) => {
           ball.position.x += (x - ball.position.x) * Math.min(1, dt * 10);
@@ -428,25 +432,28 @@ function buildEquipment(id: string, ctx: Ctx): Built {
     case 'buret': {
       const base = box(0.22, 0.02, 0.16, metalMat('#334155', 0.45));
       base.position.y = 0.01;
-      const rod = cyl(0.01, 0.01, 0.75, metalMat('#94a3b8'), 12);
-      rod.position.set(-0.08, 0.38, 0);
+      const rod = cyl(0.01, 0.01, 0.95, metalMat('#94a3b8'), 12);
+      rod.position.set(-0.08, 0.48, 0);
       const clamp = box(0.1, 0.02, 0.02, metalMat('#475569'));
-      clamp.position.set(-0.03, 0.55, 0);
+      clamp.position.set(-0.03, 0.72, 0);
       const tube = cyl(0.015, 0.015, 0.5, glassMat(), 16);
-      tube.position.set(0.02, 0.5, 0);
+      tube.position.set(0.02, 0.63, 0);
       const liq = liquid('#7e22ce', 0.012, 0.42);
-      liq.position.set(0.02, 0.29, 0);
+      liq.position.set(0.02, 0.42, 0);
+      const tip = cyl(0.006, 0.003, 0.05, glassMat(), 8);
+      tip.position.set(0.02, 0.345, 0);
       const tap = box(0.05, 0.012, 0.012, plasticMat('#0f172a'));
-      tap.position.set(0.02, 0.24, 0);
+      tap.position.set(0.02, 0.375, 0);
       const dropM = mat('#7e22ce', { transparent: true, opacity: 0.9 });
       const drop = sphere(0.007, dropM, 10);
       drop.visible = false;
       const stream = cyl(0.003, 0.003, 0.2, dropM, 6);
-      stream.position.set(0.02, 0.13, 0);
+      stream.position.set(0.02, 0.22, 0);
       stream.visible = false;
-      g.add(base, rod, clamp, tube, liq, tap, drop, stream);
+      g.add(base, rod, clamp, tube, liq, tip, tap, drop, stream);
       let lastDrops = 0;
       let fall = -1;
+      let floor = 0.03;
       return {
         g,
         apply: (s, _w, items) => {
@@ -454,8 +461,11 @@ function buildEquipment(id: string, ctx: Ctx): Built {
           liq.scale.y = Math.max(0.001, s.left / 25);
           tap.rotation.y = s.valve > 0 ? Math.PI / 2 : 0;
           stream.visible = s.valve === 3 && s.left > 0;
-          // Bình nón đặt ngay chỗ bên cạnh → giọt rơi vào bình; ngược lại rơi xuống bàn
-          stream.scale.y = items.includes('binh-non') ? 0.6 : 1;
+          // Có bình nón lắp dưới vòi → dòng chảy dừng ở miệng bình; không có → chảy xuống bàn
+          const hasFlask = childOn(_w, items, 'binh-non', ctx.slot) >= 0;
+          stream.scale.y = hasFlask ? 0.45 : 1.6;
+          stream.position.y = hasFlask ? 0.29 : 0.17;
+          floor = hasFlask ? 0.27 : 0.03;
           if (s.drops > lastDrops && s.valve < 3) fall = 0;
           lastDrops = s.drops;
         },
@@ -466,8 +476,8 @@ function buildEquipment(id: string, ctx: Ctx): Built {
           }
           fall += dt;
           drop.visible = true;
-          drop.position.set(0.02, 0.23 - 0.5 * 9.8 * fall * fall, 0);
-          if (drop.position.y < 0.03) fall = -1;
+          drop.position.set(0.02, 0.33 - 0.5 * 9.8 * fall * fall, 0);
+          if (drop.position.y < floor) fall = -1;
         }
       };
     }
@@ -524,7 +534,22 @@ function buildEquipment(id: string, ctx: Ctx): Built {
       const glow = new THREE.PointLight('#fbbf24', 0, 0.8);
       glow.position.y = 0.2;
       const lid = cyl(0.02, 0.022, 0.04, plasticMat('#e5e7eb'), 12);
-      g.add(body, fuel, wick, flame, glow, lid);
+      const ringT = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.006, 6, 28), metalMat('#334155', 0.4));
+      ringT.rotation.x = Math.PI / 2;
+      ringT.position.y = 0.22;
+      const gauze = new THREE.Mesh(
+        new THREE.CircleGeometry(0.1, 24),
+        mat('#9ca3af', { side: THREE.DoubleSide, roughness: 0.9 })
+      );
+      gauze.rotation.x = -Math.PI / 2;
+      gauze.position.y = 0.222;
+      g.add(body, fuel, wick, flame, glow, lid, ringT, gauze);
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        const legK = cyl(0.005, 0.005, 0.23, metalMat('#334155', 0.4), 6);
+        legK.position.set(Math.cos(a) * 0.1, 0.11, Math.sin(a) * 0.1);
+        g.add(legK);
+      }
       let t = 0;
       return {
         g,
@@ -733,8 +758,12 @@ function buildEquipment(id: string, ctx: Ctx): Built {
   }
 }
 
+/** Dụng cụ con bị ẩn mô hình riêng khi đã lắp vào dụng cụ chủ (vì dụng cụ chủ vẽ sẵn phần lắp) */
+const HIDE_WHEN_MOUNTED: Record<string, string> = { 'bi-thep': 'mang-nghieng', 'cong-quang-dien': 'mang-nghieng' };
+
 /**
- * Dựng bàn tự do. onAdvance(dt) được gọi khoảng 10 lần/giây với thời gian thực đã trôi
+ * Dựng bàn tự do. Mỗi dụng cụ đặt theo toạ độ world.pos (kéo tự do: X-Z, giữ Shift để nâng/hạ Y), có vòng định vị
+ * dưới chân trên mặt bàn. onAdvance(dt) được gọi khoảng 10 lần/giây với thời gian thực đã trôi
  * (engine đang Tạm dừng thì không tick → thời gian mô phỏng cũng dừng).
  */
 export function buildSandboxScene(
@@ -747,75 +776,89 @@ export function buildSandboxScene(
   root.add(makeBench(4.2, 2));
   const interactive: THREE.Object3D[] = [];
   const built: Built[] = [];
-  const pads: THREE.MeshBasicMaterial[] = [];
-  const snapPoints: SnapPoint[] = [];
+  const holders: THREE.Group[] = [];
+  const rings: THREE.Mesh[] = [];
   const list = items.slice(0, SANDBOX_SLOTS);
-  // Vạch chỗ đặt trên bàn
-  for (let i = 0; i < SANDBOX_SLOTS; i++) {
-    const p = slotPosition(i);
-    const pm = new THREE.MeshBasicMaterial({
-      color: '#94a3b8',
-      transparent: true,
-      opacity: list[i] ? 0.15 : 0.45,
-      toneMapped: false
-    });
-    const pad = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.185, 40), pm);
-    pad.rotation.x = -Math.PI / 2;
-    pad.position.set(p.x, 0.002, p.z);
-    root.add(pad);
-    pads.push(pm);
-  }
   list.forEach((id, i) => {
     const def = equipmentById(id);
     const b = buildEquipment(def ? id : 'khac', { slot: i, items: list });
-    const p = slotPosition(i);
     const holder = new THREE.Group();
-    holder.position.copy(p);
+    const p = world?.pos[i] ?? [0, 0, 0];
+    holder.position.set(p[0], p[1], p[2]);
     holder.add(b.g);
+    // Nhãn đặt trên đỉnh dụng cụ
+    const top = new THREE.Box3().setFromObject(b.g).max.y;
     const label = makeLabel(`${i + 1}. ${def?.name ?? id}`, { size: 26 });
     label.scale.multiplyScalar(0.75);
-    label.position.set(0, 0.66, 0);
+    label.position.set(0, Math.max(0.3, top) + 0.14, 0);
     holder.add(label);
+    // Vòng định vị (bóng) luôn nằm trên mặt bàn ngay dưới chân dụng cụ
+    const ringM = new THREE.MeshBasicMaterial({
+      color: '#94a3b8',
+      transparent: true,
+      opacity: 0.35,
+      toneMapped: false,
+      depthWrite: false
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.17, 40), ringM);
+    ring.rotation.x = -Math.PI / 2;
+    const shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.13, 32),
+      new THREE.MeshBasicMaterial({
+        color: '#0f172a',
+        transparent: true,
+        opacity: 0.18,
+        toneMapped: false,
+        depthWrite: false
+      })
+    );
+    shadow.position.z = 0.0005;
+    ring.add(shadow);
+    holder.add(ring);
     const tag = `sb:${i}:${id}`;
-    tagObject(holder, tag, `${def?.name ?? id} — chạm để điều khiển, kéo để đổi chỗ`, true);
+    tagObject(holder, tag, `${def?.name ?? id} — chạm để điều khiển, bấm giữ & kéo để di chuyển (Shift: nâng/hạ)`);
+    holder.userData.freeDrag = true;
+    holder.userData.bounds = { ...BENCH_BOUNDS };
     root.add(holder);
     interactive.push(holder);
     built.push(b);
-    // Kéo dụng cụ sang chỗ khác: mỗi chỗ còn lại là một điểm gắn nhận dụng cụ này
-    for (let j = 0; j < Math.min(SANDBOX_SLOTS, list.length); j++) {
-      if (j === i) continue;
-      const q = slotPosition(j);
-      snapPoints.push({
-        id: `sbslot:${j}`,
-        position: new THREE.Vector3(q.x, 0, q.z),
-        accepts: tag,
-        marker: new THREE.Object3D(),
-        filled: false
-      });
-    }
+    holders.push(holder);
+    rings.push(ring);
   });
   let acc = 0;
+  let last: SandboxWorld | null = world;
   const apply = (w: SandboxWorld, sel: number | null): void => {
-    pads.forEach((pm, i) => {
-      pm.color.set(sel === i ? '#38bdf8' : '#94a3b8');
-      pm.opacity = sel === i ? 0.95 : list[i] ? 0.15 : 0.45;
-    });
+    last = w;
     built.forEach((b, i) => {
       const s = w.states[i];
       if (s) b.apply(s, w, list);
+      const h = holders[i];
+      const p = w.pos[i];
+      // Không giật dụng cụ đang được kéo về vị trí cũ
+      if (p && !h.userData.dragging) h.position.set(p[0], p[1], p[2]);
+      const host = w.links[i] ?? -1;
+      b.g.visible = !(HIDE_WHEN_MOUNTED[list[i]] && list[host] === HIDE_WHEN_MOUNTED[list[i]]);
+      const rm = rings[i].material as THREE.MeshBasicMaterial;
+      rm.color.set(sel === i ? '#38bdf8' : host >= 0 ? '#22c55e' : '#94a3b8');
+      rm.opacity = sel === i ? 0.95 : host >= 0 ? 0.6 : 0.35;
     });
   };
   if (world) apply(world, selected);
   return {
     root,
     interactive,
-    snapPoints,
+    snapPoints: [],
     cameraPosition: new THREE.Vector3(0, 1.75, 3.1),
     cameraTarget: new THREE.Vector3(0, 0.2, -0.05),
     update: noop,
     apply,
     tick(dt) {
       for (const b of built) b.tick(dt);
+      // Vòng định vị bám mặt bàn kể cả khi dụng cụ được nâng lên
+      holders.forEach((h, i) => {
+        rings[i].position.set(0, 0.003 - h.position.y, 0);
+        rings[i].visible = h.position.y > 0.004 || last?.links[i] === -1 || h.userData.dragging === true;
+      });
       acc += dt;
       if (acc >= 0.1) {
         onAdvance(Math.min(acc, 0.5));

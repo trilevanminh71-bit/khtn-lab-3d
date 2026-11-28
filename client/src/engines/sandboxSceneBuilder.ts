@@ -1,13 +1,34 @@
 /**
- * engines/sandboxSceneBuilder.ts — Cảnh 3D "Tự do thí nghiệm": bàn thí nghiệm trống + các dụng cụ học sinh tự chọn.
- * Đầu vào : danh sách mã dụng cụ (data/equipmentCatalog.ts) theo thứ tự chỗ trên bàn (tối đa SANDBOX_SLOTS).
- * Đầu ra  : SceneHandle. Chạm vào dụng cụ (thẻ "sb:<mã>") → hiệu ứng minh họa (lửa đèn cồn, giọt burette, đồng hồ đếm…).
- * Ý nghĩa : chỉ để khám phá hình dáng và cách dùng dụng cụ — KHÔNG tạo số liệu đo, không liên quan bài nộp.
- * Mọi mô hình dựng bằng hình học cơ bản (0 KB tải thêm); hoạt cảnh dừng khi người dùng bấm Tạm dừng (engine không gọi tick).
+ * engines/sandboxSceneBuilder.ts — Cảnh 3D "Tự do thí nghiệm": bàn thí nghiệm + dụng cụ học sinh tự chọn, VẬN HÀNH THEO THAO TÁC.
+ * Đầu vào : danh sách mã dụng cụ (data/equipmentCatalog.ts) theo thứ tự chỗ trên bàn, trạng thái mô phỏng (engines/sandboxSim.ts).
+ * Đầu ra  : SandboxSceneHandle — apply(world) cập nhật hình ảnh theo trạng thái (mực chất lỏng, màu, ngọn lửa, kim/màn hình, vị trí bi…);
+ *           tick(dt) chạy hoạt cảnh mượt và báo onAdvance để tiến thời gian mô phỏng (engine Tạm dừng → không tick → thời gian dừng).
+ * Thao tác trong 3D:
+ *  - Chạm dụng cụ (thẻ "sb:<chỗ>:<mã>") → chọn để điều khiển ở bảng bên; kéo dụng cụ sang chỗ khác trên bàn (điểm gắn "sbslot:<chỗ>").
+ *  - Kéo viên bi dọc máng (vị trí thả) và kéo cổng quang điện dọc máng (thẻ "sbs:<chỗ>:<khóa>").
+ * Ý nghĩa : chỉ để khám phá cách dùng dụng cụ — KHÔNG tạo số liệu bài, không liên quan bài nộp.
+ * Mọi mô hình dựng bằng hình học cơ bản (0 KB tải thêm).
  */
 import * as THREE from 'three';
 import { equipmentById, SANDBOX_SLOTS } from '../data/equipmentCatalog';
-import { box, cyl, disposeObject, glassMat, makeBench, makeDisplay, makeLabel, mat, metalMat, plasticMat, sphere, tagObject, type SceneHandle } from './sceneKit';
+import { AMBIENT_C, flaskExcessMl, RAIL_LEN, type SandboxWorld, type SbState } from './sandboxSim';
+import {
+  box,
+  cyl,
+  disposeObject,
+  glassMat,
+  makeBench,
+  makeDisplay,
+  makeLabel,
+  mat,
+  metalMat,
+  plasticMat,
+  sphere,
+  tagObject,
+  type SceneHandle,
+  type SlideSpec,
+  type SnapPoint
+} from './sceneKit';
 
 /** Vị trí chỗ đặt trên bàn: 2 hàng × 4 cột */
 export function slotPosition(i: number): THREE.Vector3 {
@@ -16,17 +37,68 @@ export function slotPosition(i: number): THREE.Vector3 {
   return new THREE.Vector3(-1.5 + col, 0, row === 0 ? 0.35 : -0.5);
 }
 
+export interface SandboxSceneHandle extends SceneHandle {
+  apply(world: SandboxWorld, selected: number | null): void;
+}
+
+interface Ctx {
+  slot: number;
+  items: string[];
+}
+
 interface Built {
   g: THREE.Group;
-  /** Hiệu ứng khi chạm */
-  react(): void;
+  apply(s: SbState, w: SandboxWorld, items: string[]): void;
   tick(dt: number): void;
 }
 
 const noop = (): void => undefined;
 
 function liquid(color: string, r: number, h: number): THREE.Mesh {
-  return cyl(r, r, h, mat(color, { transparent: true, opacity: 0.75, roughness: 0.2 }), 24);
+  const m = cyl(r, r, h, mat(color, { transparent: true, opacity: 0.75, roughness: 0.2 }), 24);
+  m.geometry.translate(0, h / 2, 0); // gốc ở đáy → scale.y = mực chất lỏng
+  return m;
+}
+const liqMat = (m: THREE.Mesh): THREE.MeshStandardMaterial => m.material as THREE.MeshStandardMaterial;
+
+/** Bọt khí nổi lên với cường độ 0..1 */
+function bubbles(
+  g: THREE.Group,
+  r: number,
+  y0: number,
+  h: number,
+  n = 16
+): { set(intensity: number, top: number): void; tick(dt: number): void } {
+  const list: THREE.Mesh[] = [];
+  const bm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85 });
+  for (let i = 0; i < n; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.007 + (i % 3) * 0.002, 6, 4), bm);
+    const a = i * 2.4;
+    b.position.set(
+      Math.cos(a) * r * ((i % 4) / 5 + 0.2),
+      y0 + ((i * 0.37) % 1) * h,
+      Math.sin(a) * r * ((i % 4) / 5 + 0.2)
+    );
+    b.visible = false;
+    g.add(b);
+    list.push(b);
+  }
+  let k = 0;
+  let topY = y0 + h;
+  return {
+    set(intensity, top) {
+      k = intensity;
+      topY = Math.max(y0 + 0.01, top);
+    },
+    tick(dt) {
+      list.forEach((b, i) => {
+        b.visible = k > 0.02 && i < Math.ceil(k * n);
+        if (!b.visible) return;
+        b.position.y += dt * (0.08 + 0.12 * k);
+        if (b.position.y > topY) b.position.y = y0;
+      });
+    }
+  };
 }
 
 function bottle(color: string, label: string): Built {
@@ -34,94 +106,107 @@ function bottle(color: string, label: string): Built {
   const body = cyl(0.09, 0.09, 0.24, glassMat(), 24);
   body.position.y = 0.12;
   const liq = liquid(color, 0.082, 0.17);
-  liq.position.y = 0.095;
+  liq.position.y = 0.01;
   const neck = cyl(0.035, 0.05, 0.06, glassMat(), 16);
   neck.position.y = 0.27;
   const cap = cyl(0.04, 0.04, 0.04, plasticMat('#1f2937'), 16);
   cap.position.y = 0.32;
-  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.08), new THREE.MeshBasicMaterial({ color: '#f8fafc', toneMapped: false }));
-  tag.position.set(0, 0.13, 0.092);
   const txt = makeLabel(label, { size: 22, bg: 'rgba(248,250,252,0.95)', color: '#0f172a' });
   txt.scale.multiplyScalar(0.55);
   txt.position.set(0, 0.13, 0.1);
-  g.add(body, liq, neck, cap, tag, txt);
-  let spin = 0;
+  g.add(body, liq, neck, cap, txt);
+  const closed = new THREE.Vector3(0, 0.32, 0);
+  const opened = new THREE.Vector3(0.17, 0.02, 0.05);
+  let target = closed;
   return {
     g,
-    react: () => {
-      spin = Math.PI * 2;
+    apply: (s) => {
+      target = s.open ? opened : closed;
     },
     tick: (dt) => {
-      if (spin <= 0) return;
-      const d = Math.min(spin, dt * 6);
-      spin -= d;
-      g.rotation.y += d;
+      cap.position.lerp(target, Math.min(1, dt * 8));
+      cap.rotation.x = target === opened ? Math.PI : 0;
     }
   };
 }
 
-function bubbleVessel(g: THREE.Group, liq: THREE.Mesh, r: number, h: number, y0: number): Built {
-  const bubbles: THREE.Mesh[] = [];
-  const bm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 });
-  for (let i = 0; i < 14; i++) {
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 4), bm);
-    b.visible = false;
-    g.add(b);
-    bubbles.push(b);
-  }
-  let left = 0;
-  return {
-    g,
-    react: () => {
-      left = 3;
-      bubbles.forEach((b, i) => {
-        const a = i * 2.4;
-        b.position.set(Math.cos(a) * r * 0.6, y0 + ((i * 0.37) % 1) * h, Math.sin(a) * r * 0.6);
-        b.visible = true;
-      });
-    },
-    tick: (dt) => {
-      if (left <= 0) return;
-      left -= dt;
-      for (const b of bubbles) {
-        b.position.y += dt * 0.12;
-        if (b.position.y > y0 + h) b.position.y = y0;
-        b.visible = left > 0;
-      }
-      liq.scale.y = 1 + Math.sin(left * 12) * 0.02;
-    }
-  };
-}
-
-/** Dựng mô hình một dụng cụ; gốc toạ độ = mặt bàn */
-function buildEquipment(id: string): Built {
+/** Dựng mô hình một dụng cụ; gốc toạ độ = mặt bàn tại chỗ đặt */
+function buildEquipment(id: string, ctx: Ctx): Built {
   const g = new THREE.Group();
   switch (id) {
     case 'mang-nghieng': {
-      const rail = box(0.9, 0.035, 0.09, metalMat('#b6c2d1', 0.28));
-      rail.position.set(0, 0.12, 0);
-      rail.rotation.z = -0.12;
-      const ruler = box(0.9, 0.006, 0.03, mat('#fde68a'));
-      ruler.position.set(0, 0.142, 0.05);
-      ruler.rotation.z = -0.12;
-      const leg = box(0.03, 0.2, 0.06, metalMat('#475569', 0.4));
-      leg.position.set(-0.42, 0.1, 0);
-      const ball = sphere(0.025, metalMat('#eef2f7', 0.08), 24);
-      ball.position.set(-0.4, 0.2, 0);
-      g.add(rail, ruler, leg, ball);
-      let t = -1;
+      // Máng quay quanh đầu dưới (bên phải); đầu trên nâng bởi chân đỡ → góc nghiêng thật
+      const rail = new THREE.Group();
+      rail.position.set(0.4, 0.03, 0);
+      const bar = box(RAIL_LEN + 0.04, 0.03, 0.08, metalMat('#b6c2d1', 0.28));
+      bar.position.set(-RAIL_LEN / 2, 0, 0);
+      const ruler = box(RAIL_LEN, 0.005, 0.025, mat('#fde68a'));
+      ruler.position.set(-RAIL_LEN / 2, 0.017, 0.045);
+      for (let k = 0; k <= 8; k++) {
+        const tick = box(0.003, 0.006, 0.012, mat('#0f172a'));
+        tick.position.set(-RAIL_LEN + k * 0.1, 0.021, 0.045);
+        rail.add(tick);
+      }
+      const ball = sphere(0.02, metalMat('#eef2f7', 0.08), 24);
+      tagObject(ball, `sbs:${ctx.slot}:s`, 'Viên bi — kéo dọc máng để chọn vị trí thả');
+      ball.userData.slide = {
+        param: `sbs:${ctx.slot}:s`,
+        start: new THREE.Vector3(-RAIL_LEN, 0.035, 0),
+        end: new THREE.Vector3(-RAIL_LEN + 0.3, 0.035, 0),
+        min: 0,
+        max: 0.3
+      } satisfies SlideSpec;
+      const gateM = plasticMat('#1d4ed8');
+      const gate = new THREE.Group();
+      const ga = box(0.012, 0.09, 0.012, gateM);
+      ga.position.set(0, 0.045, -0.055);
+      const gb = box(0.012, 0.09, 0.012, gateM);
+      gb.position.set(0, 0.045, 0.055);
+      const gt = box(0.012, 0.012, 0.122, gateM);
+      gt.position.y = 0.09;
+      const ledM = new THREE.MeshBasicMaterial({ color: '#7f1d1d', toneMapped: false });
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), ledM);
+      led.position.set(0, 0.1, 0);
+      gate.add(ga, gb, gt, led);
+      tagObject(gate, `sbs:${ctx.slot}:gate`, 'Cổng quang điện — kéo dọc máng để đổi vị trí');
+      gate.userData.slide = {
+        param: `sbs:${ctx.slot}:gate`,
+        start: new THREE.Vector3(-RAIL_LEN + 0.2, 0, 0),
+        end: new THREE.Vector3(-RAIL_LEN + 0.75, 0, 0),
+        min: 0.2,
+        max: 0.75
+      } satisfies SlideSpec;
+      rail.add(bar, ruler, ball, gate);
+      const leg = box(0.03, 1, 0.05, metalMat('#475569', 0.4));
+      leg.geometry.translate(0, 0.5, 0);
+      g.add(rail, leg);
+      let ang = 10;
+      let sPos = 0.05;
+      let spin = 0;
       return {
         g,
-        react: () => {
-          t = 0;
+        apply: (s, _w, items) => {
+          ang = s.angle;
+          ball.visible = items.includes('bi-thep');
+          gate.visible = items.includes('cong-quang-dien');
+          gate.position.x = -RAIL_LEN + s.gate;
+          spin = s.rolling ? s.v : 0;
+          sPos = s.s;
+          ledM.color.set(
+            items.includes('cong-quang-dien') && _w.states[items.indexOf('cong-quang-dien')]?.flash > 0.3
+              ? '#ff3b3b'
+              : '#7f1d1d'
+          );
         },
         tick: (dt) => {
-          if (t < 0) return;
-          t = Math.min(1, t + dt * 0.8);
-          const x = -0.4 + 0.8 * t * t;
-          ball.position.set(x, 0.2 - (x + 0.4) * Math.tan(0.12), 0);
-          ball.rotation.z -= dt * 12;
-          if (t >= 1) t = -1;
+          const cur = -rail.rotation.z;
+          const want = (ang * Math.PI) / 180;
+          rail.rotation.z = -(cur + (want - cur) * Math.min(1, dt * 6));
+          const th = -rail.rotation.z;
+          leg.position.set(0.4 - (RAIL_LEN + 0.0) * Math.cos(th), 0, 0);
+          leg.scale.y = Math.max(0.03, 0.03 + RAIL_LEN * Math.sin(th));
+          ball.position.set(-RAIL_LEN + sPos, 0.035, 0);
+          ball.rotation.z -= (spin * dt) / 0.02;
         }
       };
     }
@@ -129,18 +214,19 @@ function buildEquipment(id: string): Built {
       const ball = sphere(0.05, metalMat('#eef2f7', 0.08), 32);
       ball.position.y = 0.05;
       g.add(ball);
+      let x = 0;
       let v = 0;
       return {
         g,
-        react: () => {
-          v = 0.6;
+        apply: (s, _w, items) => {
+          x = s.x;
+          v = s.v;
+          // Khi có máng nghiêng, viên bi được dùng trên máng
+          ball.visible = !items.includes('mang-nghieng');
         },
         tick: (dt) => {
-          if (v <= 0.001) return;
-          ball.position.x += v * dt;
+          ball.position.x += (x - ball.position.x) * Math.min(1, dt * 10);
           ball.rotation.z -= (v * dt) / 0.05;
-          v *= Math.pow(0.15, dt);
-          if (ball.position.x > 0.3) ball.position.x = -0.3;
         }
       };
     }
@@ -152,25 +238,29 @@ function buildEquipment(id: string): Built {
       b.position.set(0, 0.15, 0.13);
       const top = box(0.03, 0.03, 0.29, m);
       top.position.y = 0.3;
-      const beamM = new THREE.MeshBasicMaterial({ color: '#7f1d1d', transparent: true, opacity: 0.35, toneMapped: false });
+      const beamM = new THREE.MeshBasicMaterial({
+        color: '#7f1d1d',
+        transparent: true,
+        opacity: 0.35,
+        toneMapped: false
+      });
       const ray = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.24, 6), beamM);
       ray.rotation.x = Math.PI / 2;
       ray.position.y = 0.15;
-      const led = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), beamM);
+      const ledM = new THREE.MeshBasicMaterial({ color: '#14532d', toneMapped: false });
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), ledM);
       led.position.set(0.02, 0.32, 0);
       g.add(a, b, top, ray, led);
-      let flash = 0;
       return {
         g,
-        react: () => {
-          flash = 1.2;
+        apply: (s) => {
+          const blocked = s.power && s.flash > 0.3;
+          ray.visible = s.power === 1;
+          beamM.color.set(blocked ? '#ff3b3b' : '#7f1d1d');
+          beamM.opacity = blocked ? 1 : 0.35;
+          ledM.color.set(!s.power ? '#1f2937' : blocked ? '#ff3b3b' : '#22c55e');
         },
-        tick: (dt) => {
-          flash = Math.max(0, flash - dt);
-          const on = flash > 0 && Math.floor(flash * 6) % 2 === 0;
-          beamM.color.set(on ? '#ff3b3b' : '#7f1d1d');
-          beamM.opacity = on ? 1 : 0.35;
-        }
+        tick: noop
       };
     }
     case 'dong-ho-so': {
@@ -179,74 +269,55 @@ function buildEquipment(id: string): Built {
       const disp = makeDisplay(0.26, 0.08);
       disp.mesh.position.set(0, 0.11, 0.081);
       g.add(shell, disp.mesh);
-      let running = false;
-      let t = 0;
       disp.set('0.000');
       return {
         g,
-        react: () => {
-          running = !running;
-          if (running) t = 0;
-        },
-        tick: (dt) => {
-          if (!running) return;
-          t += dt;
-          disp.set(t.toFixed(3));
-        }
+        apply: (s) => disp.set(s.t.toFixed(3), s.mode === 1 && s.run ? '#fbbf24' : '#22d3ee'),
+        tick: noop
       };
     }
     case 'luc-ke': {
-      const stand = box(0.04, 0.5, 0.04, metalMat('#64748b', 0.4));
-      stand.position.set(-0.1, 0.25, 0);
+      const stand = box(0.04, 0.55, 0.04, metalMat('#64748b', 0.4));
+      stand.position.set(-0.1, 0.275, 0);
       const arm = box(0.2, 0.025, 0.025, metalMat('#64748b', 0.4));
-      arm.position.set(0, 0.49, 0);
-      const tube = cyl(0.025, 0.025, 0.18, plasticMat('#f8fafc'), 16);
-      tube.position.set(0.08, 0.38, 0);
+      arm.position.set(0, 0.54, 0);
+      const tube = cyl(0.025, 0.025, 0.14, plasticMat('#f8fafc'), 16);
+      tube.position.set(0.08, 0.46, 0);
       const spring = cyl(0.012, 0.012, 0.1, metalMat('#f59e0b', 0.3), 12);
-      spring.position.set(0.08, 0.25, 0);
-      const hook = sphere(0.02, metalMat('#94a3b8'), 12);
-      hook.position.set(0.08, 0.19, 0);
-      g.add(stand, arm, tube, spring, hook);
-      let t = -1;
+      spring.geometry.translate(0, -0.05, 0);
+      spring.position.set(0.08, 0.39, 0);
+      const hook = sphere(0.012, metalMat('#94a3b8'), 12);
+      const stack = cyl(0.03, 0.03, 0.012, metalMat('#a3a3a3', 0.3), 20);
+      stack.geometry.translate(0, -0.006, 0);
+      g.add(stand, arm, tube, spring, hook, stack);
+      let x = 0;
+      let n = 0;
       return {
         g,
-        react: () => {
-          t = 0;
+        apply: (s) => {
+          x = s.x;
+          n = s.n;
         },
-        tick: (dt) => {
-          if (t < 0) return;
-          t += dt;
-          const s = 1 + 0.6 * Math.sin(Math.min(Math.PI, t * 2.5));
-          spring.scale.y = s;
-          spring.position.y = 0.3 - 0.05 * s;
-          hook.position.y = 0.3 - 0.1 * s - 0.01;
-          if (t * 2.5 >= Math.PI) t = -1;
+        tick: () => {
+          const len = 0.06 + x * 1.2;
+          spring.scale.y = len / 0.1;
+          const end = 0.39 - len;
+          hook.position.set(0.08, end - 0.01, 0);
+          stack.visible = n > 0;
+          stack.scale.y = Math.max(1, n);
+          stack.position.set(0.08, end - 0.02, 0);
         }
       };
     }
     case 'qua-nang': {
-      const weights: THREE.Mesh[] = [];
       for (let i = 0; i < 3; i++) {
         const w = cyl(0.035, 0.035, 0.04, metalMat('#a3a3a3', 0.3), 20);
         w.position.set(-0.09 + i * 0.09, 0.02, 0);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.004, 6, 12), metalMat('#94a3b8'));
         ring.position.set(-0.09 + i * 0.09, 0.05, 0);
         g.add(w, ring);
-        weights.push(w);
       }
-      let t = -1;
-      return {
-        g,
-        react: () => {
-          t = 0;
-        },
-        tick: (dt) => {
-          if (t < 0) return;
-          t += dt;
-          weights.forEach((w, i) => (w.rotation.z = Math.sin(t * 10 + i) * 0.15 * Math.max(0, 1 - t)));
-          if (t > 1) t = -1;
-        }
-      };
+      return { g, apply: noop, tick: noop };
     }
     case 'pin-von-ke': {
       const cell = cyl(0.04, 0.04, 0.14, plasticMat('#16a34a'), 20);
@@ -254,56 +325,103 @@ function buildEquipment(id: string): Built {
       cell.position.set(-0.15, 0.04, 0);
       const meter = box(0.2, 0.16, 0.08, plasticMat('#e2e8f0'));
       meter.position.set(0.08, 0.08, 0);
-      const face = new THREE.Mesh(new THREE.CircleGeometry(0.06, 24, 0, Math.PI), new THREE.MeshBasicMaterial({ color: '#f8fafc', toneMapped: false }));
+      const face = new THREE.Mesh(
+        new THREE.CircleGeometry(0.06, 24, 0, Math.PI),
+        new THREE.MeshBasicMaterial({ color: '#f8fafc', toneMapped: false })
+      );
       face.position.set(0.08, 0.07, 0.041);
       const needle = box(0.004, 0.055, 0.002, mat('#dc2626'));
       needle.geometry.translate(0, 0.0275, 0);
       needle.position.set(0.08, 0.07, 0.043);
       needle.rotation.z = 1.2;
-      g.add(cell, meter, face, needle);
-      let target = 1.2;
+      const sw = box(0.05, 0.01, 0.02, metalMat('#94a3b8'));
+      sw.position.set(-0.05, 0.1, 0.03);
+      g.add(cell, meter, face, needle, sw);
       return {
         g,
-        react: () => {
-          target = target > 0 ? -0.6 : 1.2;
+        apply: (s) => {
+          const f = Math.max(-0.12, Math.min(1.05, s.u / s.range));
+          needle.rotation.z = 1.2 - f * 2.4;
+          sw.rotation.z = s.k ? 0 : 0.5;
         },
-        tick: (dt) => {
-          needle.rotation.z += (target - needle.rotation.z) * Math.min(1, dt * 4);
-        }
+        tick: noop
       };
     }
     case 'coc-thuy-tinh': {
       const glass = cyl(0.11, 0.1, 0.26, glassMat(), 28, true);
       glass.position.y = 0.13;
-      const liq = liquid('#93c5fd', 0.095, 0.14);
-      liq.position.y = 0.075;
-      g.add(glass, liq);
-      return bubbleVessel(g, liq, 0.09, 0.14, 0.01);
+      const liq = liquid('#93c5fd', 0.095, 0.24);
+      liq.position.y = 0.005;
+      const bub = bubbles(g, 0.09, 0.01, 0.2);
+      const steamM = new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0 });
+      const steam = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 16, 1, true), steamM);
+      steam.position.y = 0.36;
+      steam.rotation.x = Math.PI;
+      g.add(glass, liq, steam);
+      let t = 0;
+      return {
+        g,
+        apply: (s) => {
+          const f = Math.max(0.001, s.vol / 250);
+          liq.visible = s.vol > 0.5;
+          liq.scale.y = f;
+          const hot = Math.max(0, Math.min(1, (s.T - AMBIENT_C) / 75));
+          liqMat(liq).color.setRGB(0.58 + 0.3 * hot, 0.77 - 0.1 * hot, 0.99 - 0.25 * hot);
+          bub.set(s.T >= 99.5 ? 1 : Math.max(0, (s.T - 70) / 60), 0.005 + 0.24 * f);
+          steamM.opacity = s.T > 80 ? Math.min(0.35, (s.T - 80) / 50) : 0;
+        },
+        tick: (dt) => {
+          t += dt;
+          bub.tick(dt);
+          steam.scale.setScalar(1 + Math.sin(t * 3) * 0.08);
+        }
+      };
     }
     case 'binh-non': {
       const body = cyl(0.04, 0.12, 0.18, glassMat(), 28);
       body.position.y = 0.09;
       const neck = cyl(0.035, 0.035, 0.08, glassMat(), 16, true);
       neck.position.y = 0.22;
-      const liq = cyl(0.075, 0.11, 0.07, mat('#fde68a', { transparent: true, opacity: 0.7 }), 24);
-      liq.position.y = 0.04;
+      const liq = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.075, 0.112, 0.1, 24),
+        mat('#f1f5f9', { transparent: true, opacity: 0.45 })
+      );
+      liq.geometry.translate(0, 0.05, 0);
+      liq.position.y = 0.004;
+      const bub = bubbles(g, 0.08, 0.01, 0.12, 20);
       g.add(body, neck, liq);
-      let t = -1;
+      let swirl = 0;
+      let t = 0;
       return {
         g,
-        react: () => {
-          t = 0;
+        apply: (s) => {
+          liq.visible = s.vol > 0.5;
+          liq.scale.y = Math.min(1.6, Math.max(0.05, s.vol / 60));
+          const ex = flaskExcessMl(s);
+          const m = liqMat(liq);
+          if (s.brown) {
+            m.color.set('#92400e');
+            m.opacity = 0.9;
+          } else if (ex > 0.5) {
+            m.color.set('#a21caf');
+            m.opacity = 0.85;
+          } else if (ex > 0) {
+            m.color.set('#f472b6');
+            m.opacity = 0.7;
+          } else {
+            m.color.set('#f1f5f9').lerp(new THREE.Color('#f9a8d4'), Math.min(1, s.local / 2));
+            m.opacity = 0.45 + Math.min(0.3, s.local * 0.15);
+          }
+          const rate = s.h2o2 * (s.cat ? 0.02 : 2e-5);
+          bub.set(Math.min(1, rate * 4), 0.004 + 0.1 * liq.scale.y);
+          swirl = s.swirl;
         },
         tick: (dt) => {
-          if (t < 0) return;
+          bub.tick(dt);
           t += dt;
-          g.position.x = Math.sin(t * 14) * 0.015 * Math.max(0, 1.5 - t);
-          g.position.z = Math.cos(t * 14) * 0.015 * Math.max(0, 1.5 - t);
-          if (t > 1.5) {
-            t = -1;
-            g.position.x = 0;
-            g.position.z = 0;
-          }
+          const a = swirl > 0 ? 0.012 : 0;
+          g.position.x = Math.sin(t * 14) * a;
+          g.position.z = Math.cos(t * 14) * a;
         }
       };
     }
@@ -316,28 +434,40 @@ function buildEquipment(id: string): Built {
       clamp.position.set(-0.03, 0.55, 0);
       const tube = cyl(0.015, 0.015, 0.5, glassMat(), 16);
       tube.position.set(0.02, 0.5, 0);
-      const liq = liquid('#7e22ce', 0.012, 0.36);
-      liq.position.set(0.02, 0.57, 0);
+      const liq = liquid('#7e22ce', 0.012, 0.42);
+      liq.position.set(0.02, 0.29, 0);
       const tap = box(0.05, 0.012, 0.012, plasticMat('#0f172a'));
       tap.position.set(0.02, 0.24, 0);
-      const drop = sphere(0.008, mat('#7e22ce', { transparent: true, opacity: 0.9 }), 10);
+      const dropM = mat('#7e22ce', { transparent: true, opacity: 0.9 });
+      const drop = sphere(0.007, dropM, 10);
       drop.visible = false;
-      g.add(base, rod, clamp, tube, liq, tap, drop);
-      let t = -1;
+      const stream = cyl(0.003, 0.003, 0.2, dropM, 6);
+      stream.position.set(0.02, 0.13, 0);
+      stream.visible = false;
+      g.add(base, rod, clamp, tube, liq, tap, drop, stream);
+      let lastDrops = 0;
+      let fall = -1;
       return {
         g,
-        react: () => {
-          t = 0;
-          drop.visible = true;
+        apply: (s, _w, items) => {
+          liq.visible = s.left > 0.01;
+          liq.scale.y = Math.max(0.001, s.left / 25);
+          tap.rotation.y = s.valve > 0 ? Math.PI / 2 : 0;
+          stream.visible = s.valve === 3 && s.left > 0;
+          // Bình nón đặt ngay chỗ bên cạnh → giọt rơi vào bình; ngược lại rơi xuống bàn
+          stream.scale.y = items.includes('binh-non') ? 0.6 : 1;
+          if (s.drops > lastDrops && s.valve < 3) fall = 0;
+          lastDrops = s.drops;
         },
         tick: (dt) => {
-          if (t < 0) return;
-          t += dt;
-          drop.position.set(0.02, 0.22 - 0.5 * 4.9 * t * t, 0);
-          if (drop.position.y < 0.03) {
+          if (fall < 0) {
             drop.visible = false;
-            t = -1;
+            return;
           }
+          fall += dt;
+          drop.visible = true;
+          drop.position.set(0.02, 0.23 - 0.5 * 9.8 * fall * fall, 0);
+          if (drop.position.y < 0.03) fall = -1;
         }
       };
     }
@@ -347,52 +477,62 @@ function buildEquipment(id: string): Built {
       const foot = box(0.36, 0.02, 0.12, mat('#a16207'));
       foot.position.y = 0.01;
       g.add(rack, foot);
-      const tubes: THREE.Object3D[] = [];
-      ['#fde68a', '#bfdbfe', '#fecaca', '#bbf7d0'].forEach((c, i) => {
-        const t = new THREE.Group();
+      const base = ['#fef9c3', '#e0f2fe', '#fef9c3', '#fef9c3'];
+      const liqs: THREE.Mesh[] = [];
+      const holders: THREE.Group[] = [];
+      base.forEach((c, i) => {
+        const tg = new THREE.Group();
         const glass = cyl(0.018, 0.018, 0.2, glassMat(), 12, true);
         glass.position.y = 0.1;
         const l = liquid(c, 0.015, 0.07);
-        l.position.y = 0.04;
-        t.add(glass, l);
-        t.position.set(-0.13 + i * 0.087, 0.02, 0);
-        g.add(t);
-        tubes.push(t);
+        l.position.y = 0.005;
+        tg.add(glass, l);
+        tg.position.set(-0.13 + i * 0.087, 0.02, 0);
+        g.add(tg);
+        liqs.push(l);
+        holders.push(tg);
       });
-      let t = -1;
       return {
         g,
-        react: () => {
-          t = 0;
+        apply: (s) => {
+          liqs.forEach((l, i) => {
+            const k = i + 1;
+            const iod = s[`i${k}`] > 0;
+            liqMat(l).color.set(iod ? (s[`s${k}`] > 0.3 ? '#312e81' : '#b45309') : base[i]);
+            holders[i].position.y = s.sel === k ? 0.05 : 0.02;
+          });
         },
-        tick: (dt) => {
-          if (t < 0) return;
-          t += dt;
-          tubes.forEach((x, i) => (x.rotation.z = Math.sin(t * 12 + i) * 0.05 * Math.max(0, 1 - t)));
-          if (t > 1) t = -1;
-        }
+        tick: noop
       };
     }
     case 'den-con': {
       const body = cyl(0.06, 0.08, 0.1, glassMat(), 24);
       body.position.y = 0.05;
-      const fuel = liquid('#e0f2fe', 0.07, 0.05);
-      fuel.position.y = 0.03;
+      const fuel = liquid('#e0f2fe', 0.07, 0.08);
+      fuel.position.y = 0.005;
       const wick = cyl(0.01, 0.01, 0.04, mat('#f5f5f4'), 8);
       wick.position.y = 0.12;
-      const flameM = new THREE.MeshBasicMaterial({ color: '#60a5fa', transparent: true, opacity: 0.85, toneMapped: false });
+      const flameM = new THREE.MeshBasicMaterial({
+        color: '#60a5fa',
+        transparent: true,
+        opacity: 0.85,
+        toneMapped: false
+      });
       const flame = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 12), flameM);
       flame.position.y = 0.18;
       flame.visible = false;
       const glow = new THREE.PointLight('#fbbf24', 0, 0.8);
       glow.position.y = 0.2;
-      g.add(body, fuel, wick, flame, glow);
+      const lid = cyl(0.02, 0.022, 0.04, plasticMat('#e5e7eb'), 12);
+      g.add(body, fuel, wick, flame, glow, lid);
       let t = 0;
       return {
         g,
-        react: () => {
-          flame.visible = !flame.visible;
+        apply: (s) => {
+          flame.visible = s.on === 1;
           glow.intensity = flame.visible ? 0.8 : 0;
+          fuel.scale.y = Math.max(0.02, s.fuel / 100);
+          lid.position.set(s.on ? 0.12 : 0, s.on ? 0.02 : 0.14, 0);
         },
         tick: (dt) => {
           if (!flame.visible) return;
@@ -409,19 +549,19 @@ function buildEquipment(id: string): Built {
       tube.position.y = 0.2;
       const bulb = sphere(0.014, mat('#dc2626'), 12);
       bulb.position.y = 0.03;
-      const col = cyl(0.004, 0.004, 0.1, mat('#dc2626'), 8);
-      col.geometry.translate(0, 0.05, 0);
+      const col = cyl(0.004, 0.004, 0.3, mat('#dc2626'), 8);
+      col.geometry.translate(0, 0.15, 0);
       col.position.y = 0.04;
-      g.add(stand, tube, bulb, col);
-      let target = 0.6;
+      const disp = makeDisplay(0.12, 0.045);
+      disp.mesh.position.set(0, 0.42, 0.01);
+      g.add(stand, tube, bulb, col, disp.mesh);
       return {
         g,
-        react: () => {
-          target = target < 2 ? 3 : 0.6;
+        apply: (s) => {
+          col.scale.y = Math.max(0.03, Math.min(1, s.T / 110));
+          disp.set(`${s.T.toFixed(1)}°C`, '#fca5a5');
         },
-        tick: (dt) => {
-          col.scale.y += (target - col.scale.y) * Math.min(1, dt * 1.5);
-        }
+        tick: noop
       };
     }
     case 'chai-kmno4':
@@ -441,24 +581,41 @@ function buildEquipment(id: string): Built {
       arm.position.set(0, 0.18, -0.08);
       const stage = box(0.16, 0.015, 0.14, plasticMat('#1e293b'));
       stage.position.set(0, 0.14, 0.02);
-      const tube = cyl(0.025, 0.025, 0.18, plasticMat('#e2e8f0'), 16);
-      tube.position.set(0, 0.32, 0.02);
-      tube.rotation.x = -0.25;
-      const lens = cyl(0.012, 0.012, 0.05, metalMat('#cbd5e1'), 12);
-      lens.position.set(0, 0.2, 0.03);
+      const head = cyl(0.025, 0.025, 0.18, plasticMat('#e2e8f0'), 16);
+      head.position.set(0, 0.34, 0.02);
+      head.rotation.x = -0.25;
+      const turret = new THREE.Group();
+      turret.position.set(0, 0.24, 0.03);
+      const objLens: THREE.Mesh[] = [];
+      [0.03, 0.04, 0.05, 0.06].forEach((len, i) => {
+        const l = cyl(0.008, 0.01, len, metalMat(i === 3 ? '#f8fafc' : '#cbd5e1'), 10);
+        const a = (i / 4) * Math.PI * 2;
+        l.position.set(Math.cos(a) * 0.025, -len / 2, Math.sin(a) * 0.025);
+        turret.add(l);
+        objLens.push(l);
+      });
+      const knob = cyl(0.03, 0.03, 0.02, plasticMat('#0f172a'), 16);
+      knob.rotation.z = Math.PI / 2;
+      knob.position.set(0.04, 0.12, -0.08);
       const lampM = new THREE.MeshBasicMaterial({ color: '#334155', toneMapped: false });
       const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.02, 16), lampM);
       lamp.rotation.x = -Math.PI / 2;
       lamp.position.set(0, 0.032, 0.02);
-      g.add(base, arm, stage, tube, lens, lamp);
-      let on = false;
+      g.add(base, arm, stage, head, turret, knob, lamp);
+      let turretWant = 0;
+      let stageWant = 0.14;
       return {
         g,
-        react: () => {
-          on = !on;
-          lampM.color.set(on ? '#fef9c3' : '#334155');
+        apply: (s) => {
+          lampM.color.set(s.lamp ? '#fef9c3' : '#334155');
+          turretWant = -[4, 10, 40, 100].indexOf(s.obj) * (Math.PI / 2);
+          stageWant = 0.12 + (s.focus / 100) * 0.04;
+          knob.rotation.x = s.focus * 0.2;
         },
-        tick: noop
+        tick: (dt) => {
+          turret.rotation.y += (turretWant - turret.rotation.y) * Math.min(1, dt * 6);
+          stage.position.y += (stageWant - stage.position.y) * Math.min(1, dt * 8);
+        }
       };
     }
     case 'lam-kinh': {
@@ -467,24 +624,29 @@ function buildEquipment(id: string): Built {
       const sample = new THREE.Mesh(new THREE.CircleGeometry(0.018, 16), mat('#a3e635'));
       sample.rotation.x = -Math.PI / 2;
       sample.position.y = 0.007;
+      const water = new THREE.Mesh(
+        new THREE.SphereGeometry(0.012, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+        mat('#bae6fd', { transparent: true, opacity: 0.6 })
+      );
+      water.position.y = 0.006;
+      water.visible = false;
       const cover = box(0.06, 0.002, 0.06, glassMat());
-      cover.position.set(0, 0.06, 0);
-      cover.rotation.z = 0.6;
-      g.add(slide, sample, cover);
-      let t = -1;
+      cover.position.set(0.05, 0.03, 0);
+      cover.rotation.z = 0.785;
+      g.add(slide, sample, water, cover);
+      let want = 0;
+      let k = 0;
       return {
         g,
-        react: () => {
-          t = 0;
-          cover.position.y = 0.06;
-          cover.rotation.z = 0.6;
+        apply: (s) => {
+          want = s.cover;
+          water.visible = s.water > 0;
+          water.scale.set(1 + s.water * 0.3, 0.5 + 0.15 * s.water, 1 + s.water * 0.3);
         },
         tick: (dt) => {
-          if (t < 0) return;
-          t = Math.min(1, t + dt);
-          cover.position.y = 0.06 - 0.051 * t;
-          cover.rotation.z = 0.6 * (1 - t);
-          if (t >= 1) t = -1;
+          k += (want - k) * Math.min(1, dt * 3);
+          cover.position.set(0.05 * (1 - k), 0.03 - 0.021 * k, 0);
+          cover.rotation.z = 0.785 * (1 - k);
         }
       };
     }
@@ -493,27 +655,35 @@ function buildEquipment(id: string): Built {
       dish.position.y = 0.01;
       const agar = cyl(0.095, 0.095, 0.012, mat('#fef3c7', { roughness: 0.7 }), 28);
       agar.position.y = 0.007;
-      g.add(dish, agar);
+      const lid = cyl(0.105, 0.105, 0.006, glassMat(), 28);
+      lid.position.y = 0.025;
+      g.add(dish, agar, lid);
       const colonies: THREE.Mesh[] = [];
-      for (let i = 0; i < 9; i++) {
-        const c = new THREE.Mesh(new THREE.CircleGeometry(0.01, 10), mat('#f5f5f4'));
+      for (let i = 0; i < 14; i++) {
+        const c = new THREE.Mesh(new THREE.CircleGeometry(0.012, 10), mat(i >= 11 ? '#65a30d' : '#f5f5f4'));
         c.rotation.x = -Math.PI / 2;
         const a = i * 2.1;
-        c.position.set(Math.cos(a) * 0.06 * ((i % 3) / 3 + 0.3), 0.0135, Math.sin(a) * 0.06 * ((i % 3) / 3 + 0.3));
-        c.scale.setScalar(0.4);
+        const r = 0.075 * (((i * 7) % 10) / 10);
+        c.position.set(Math.cos(a) * r, 0.0135, Math.sin(a) * r);
         g.add(c);
         colonies.push(c);
       }
-      let grow = 0;
+      let lidWant = new THREE.Vector3(0, 0.025, 0);
       return {
         g,
-        react: () => {
-          grow = grow > 0 ? 0 : 1;
-          if (grow === 0) colonies.forEach((c) => c.scale.setScalar(0.4));
+        apply: (s) => {
+          const sc = 0.2 + Math.sqrt(s.cover / 100) * 2.2;
+          colonies.forEach((c, i) => {
+            if (i >= 11) {
+              c.visible = s.contam > (i - 10) * 15;
+              c.scale.setScalar(0.8);
+            } else c.scale.setScalar(sc * (0.7 + (i % 3) * 0.15));
+          });
+          lidWant = s.lid ? new THREE.Vector3(0, 0.025, 0) : new THREE.Vector3(0.12, 0.08, 0);
         },
         tick: (dt) => {
-          if (grow <= 0) return;
-          colonies.forEach((c) => c.scale.setScalar(Math.min(1.6, c.scale.x + dt * 0.3)));
+          lid.position.lerp(lidWant, Math.min(1, dt * 6));
+          lid.rotation.z = lid.position.x > 0.05 ? 0.6 : 0;
         }
       };
     }
@@ -522,21 +692,31 @@ function buildEquipment(id: string): Built {
       tube.position.set(0, 0.1, 0);
       const bulb = sphere(0.02, plasticMat('#dc2626'), 12);
       bulb.position.set(0, 0.19, 0);
+      const inside = liquid('#93c5fd', 0.006, 0.12);
+      inside.position.set(0, 0.03, 0);
       const drop = sphere(0.006, mat('#93c5fd', { transparent: true, opacity: 0.9 }), 8);
       drop.visible = false;
-      g.add(tube, bulb, drop);
+      g.add(tube, bulb, inside, drop);
+      const SRC_COLOR: Record<number, string> = { 1: '#bae6fd', 2: '#92400e', 3: '#e0f2fe', 4: '#7e22ce' };
+      let last = 0;
       let t = -1;
       return {
         g,
-        react: () => {
-          t = 0;
-          drop.visible = true;
+        apply: (s) => {
+          inside.visible = s.drops > 0;
+          inside.scale.y = Math.max(0.01, s.drops / 20);
+          const c = SRC_COLOR[s.src] ?? '#bae6fd';
+          liqMat(inside).color.set(c);
+          (drop.material as THREE.MeshStandardMaterial).color.set(c);
+          if (s.drops < last) t = 0;
+          last = s.drops;
         },
         tick: (dt) => {
           if (t < 0) return;
           t += dt;
+          drop.visible = true;
           bulb.scale.setScalar(1 - 0.25 * Math.sin(Math.min(Math.PI, t * 6)));
-          drop.position.set(0, 0.02 - 0.5 * 4.9 * t * t + 0.0, 0);
+          drop.position.set(0, 0.02 - 0.5 * 4.9 * t * t, 0);
           if (t > 0.25) {
             drop.visible = false;
             t = -1;
@@ -548,54 +728,99 @@ function buildEquipment(id: string): Built {
       const crate = box(0.15, 0.15, 0.15, plasticMat('#64748b'));
       crate.position.y = 0.075;
       g.add(crate);
-      return { g, react: noop, tick: noop };
+      return { g, apply: noop, tick: noop };
     }
   }
 }
 
-export function buildSandboxScene(items: string[]): SceneHandle {
+/**
+ * Dựng bàn tự do. onAdvance(dt) được gọi khoảng 10 lần/giây với thời gian thực đã trôi
+ * (engine đang Tạm dừng thì không tick → thời gian mô phỏng cũng dừng).
+ */
+export function buildSandboxScene(
+  items: string[],
+  world: SandboxWorld | null,
+  selected: number | null,
+  onAdvance: (dt: number) => void
+): SandboxSceneHandle {
   const root = new THREE.Group();
   root.add(makeBench(4.2, 2));
   const interactive: THREE.Object3D[] = [];
-  const built = new Map<string, Built>();
-  // Vạch chỗ trống trên bàn
+  const built: Built[] = [];
+  const pads: THREE.MeshBasicMaterial[] = [];
+  const snapPoints: SnapPoint[] = [];
+  const list = items.slice(0, SANDBOX_SLOTS);
+  // Vạch chỗ đặt trên bàn
   for (let i = 0; i < SANDBOX_SLOTS; i++) {
     const p = slotPosition(i);
-    const pad = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.18, 40), new THREE.MeshBasicMaterial({ color: '#94a3b8', transparent: true, opacity: items[i] ? 0.15 : 0.45 }));
+    const pm = new THREE.MeshBasicMaterial({
+      color: '#94a3b8',
+      transparent: true,
+      opacity: list[i] ? 0.15 : 0.45,
+      toneMapped: false
+    });
+    const pad = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.185, 40), pm);
     pad.rotation.x = -Math.PI / 2;
     pad.position.set(p.x, 0.002, p.z);
     root.add(pad);
+    pads.push(pm);
   }
-  items.slice(0, SANDBOX_SLOTS).forEach((id, i) => {
+  list.forEach((id, i) => {
     const def = equipmentById(id);
-    if (!def) return;
-    const b = buildEquipment(id);
+    const b = buildEquipment(def ? id : 'khac', { slot: i, items: list });
     const p = slotPosition(i);
     const holder = new THREE.Group();
     holder.position.copy(p);
     holder.add(b.g);
-    const label = makeLabel(def.name, { size: 26 });
+    const label = makeLabel(`${i + 1}. ${def?.name ?? id}`, { size: 26 });
     label.scale.multiplyScalar(0.75);
-    label.position.set(0, 0.62, 0);
+    label.position.set(0, 0.66, 0);
     holder.add(label);
     const tag = `sb:${i}:${id}`;
-    tagObject(holder, tag, `${def.name} — chạm để thử`);
+    tagObject(holder, tag, `${def?.name ?? id} — chạm để điều khiển, kéo để đổi chỗ`, true);
     root.add(holder);
     interactive.push(holder);
-    built.set(tag, b);
+    built.push(b);
+    // Kéo dụng cụ sang chỗ khác: mỗi chỗ còn lại là một điểm gắn nhận dụng cụ này
+    for (let j = 0; j < Math.min(SANDBOX_SLOTS, list.length); j++) {
+      if (j === i) continue;
+      const q = slotPosition(j);
+      snapPoints.push({
+        id: `sbslot:${j}`,
+        position: new THREE.Vector3(q.x, 0, q.z),
+        accepts: tag,
+        marker: new THREE.Object3D(),
+        filled: false
+      });
+    }
   });
+  let acc = 0;
+  const apply = (w: SandboxWorld, sel: number | null): void => {
+    pads.forEach((pm, i) => {
+      pm.color.set(sel === i ? '#38bdf8' : '#94a3b8');
+      pm.opacity = sel === i ? 0.95 : list[i] ? 0.15 : 0.45;
+    });
+    built.forEach((b, i) => {
+      const s = w.states[i];
+      if (s) b.apply(s, w, list);
+    });
+  };
+  if (world) apply(world, selected);
   return {
     root,
     interactive,
-    snapPoints: [],
+    snapPoints,
     cameraPosition: new THREE.Vector3(0, 1.75, 3.1),
     cameraTarget: new THREE.Vector3(0, 0.2, -0.05),
     update: noop,
-    react(tag) {
-      built.get(tag)?.react();
-    },
+    apply,
     tick(dt) {
-      for (const b of built.values()) b.tick(dt);
+      for (const b of built) b.tick(dt);
+      acc += dt;
+      if (acc >= 0.1) {
+        onAdvance(Math.min(acc, 0.5));
+        acc = 0;
+      }
     },
     dispose() {
       disposeObject(root);

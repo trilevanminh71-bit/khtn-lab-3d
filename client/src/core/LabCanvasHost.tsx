@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ThreeEngineCore } from './ThreeEngineCore';
 import { useLabStore } from '../store/useLabStore';
 import { applyAssetOverrides, buildSceneForPlugin } from '../engines/sceneFactory';
-import { buildSandboxScene } from '../engines/sandboxSceneBuilder';
+import { buildSandboxScene, type SandboxSceneHandle } from '../engines/sandboxSceneBuilder';
 import { equipmentById } from '../data/equipmentCatalog';
 import { getSolver } from '../engines/solverRegistry';
 import { generateHiddenParams, mulberry32, sessionSeed } from '../utils/randomizer';
@@ -44,6 +44,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   const sandboxOn = useLabStore((s) => s.sandboxOn);
   const sandboxItems = useLabStore((s) => s.sandboxItems);
   const wasSandbox = useRef(false);
+  const sandboxHandle = useRef<SandboxSceneHandle | null>(null);
 
   // Khởi tạo engine một lần
   useEffect(() => {
@@ -53,24 +54,41 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
       ref.current,
       {
         onInteract: (tag) => {
-          if (useLabStore.getState().sandboxOn) {
-            // Tự do thí nghiệm: chỉ hiệu ứng minh họa, không đổi số liệu bài
-            const id = tag.split(':')[2] ?? '';
-            engineRef.current?.getMainHandle()?.react?.(tag);
+          const s0 = useLabStore.getState();
+          if (s0.sandboxOn) {
+            // Tự do thí nghiệm: chạm = chọn dụng cụ để điều khiển ở bảng bên (không đổi số liệu bài)
+            const slot = Number(tag.split(':')[1]);
+            const id = s0.sandboxItems[slot] ?? '';
             const def = equipmentById(id);
-            if (def) useLabStore.getState().toast('info', `${def.name}: ${def.action}`);
+            if (!def) return;
+            s0.selectSandbox(slot);
+            if (s0.sandboxSel !== slot) s0.toast('info', `Đã chọn ${def.name} — điều khiển ở bảng bên trái.`);
             logAction('sandbox-touch', id);
             return;
           }
           const r = useLabStore.getState().triggerInteraction(tag);
           useLabStore.getState().toast(r.ok ? 'success' : 'warning', r.message);
         },
-        onSnap: (snapId) => {
+        onSnap: (snapId, tag) => {
+          const s0 = useLabStore.getState();
+          if (s0.sandboxOn) {
+            // Kéo dụng cụ sang chỗ khác trên bàn (đổi chỗ hai dụng cụ)
+            const to = Number(snapId.split(':')[1]);
+            const from = Number(tag.split(':')[1]);
+            s0.moveSandboxItem(from, to);
+            return;
+          }
           const r = useLabStore.getState().triggerInteraction(snapId);
           useLabStore.getState().toast(r.ok ? 'success' : 'warning', r.message);
         },
         onSlide: (param, value) => {
           const s = useLabStore.getState();
+          if (s.sandboxOn) {
+            // Kéo bi / cổng quang dọc máng: "sbs:<chỗ>:<khóa>"
+            const [, slot, key] = param.split(':');
+            if (key) s.sandboxControl(Number(slot), key, value);
+            return;
+          }
           const def = s.plugin.params.find((x) => x.key === param);
           if (!def) return;
           const snapped = Math.round(value / def.step) * def.step;
@@ -103,9 +121,25 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || !sandboxOn) return;
-    engine.setMainScene(buildSandboxScene(sandboxItems), wasSandbox.current);
+    const st = useLabStore.getState();
+    const h = buildSandboxScene(sandboxItems, st.sandboxWorld, st.sandboxSel, (dt) => useLabStore.getState().sandboxAdvance(dt));
+    sandboxHandle.current = h;
+    engine.setMainScene(h, wasSandbox.current);
     wasSandbox.current = true;
   }, [sandboxOn, sandboxItems]);
+
+  // Trạng thái mô phỏng đổi (thao tác / thời gian trôi) → cập nhật hình ảnh dụng cụ, không re-render React
+  useEffect(() => {
+    if (!sandboxOn) {
+      sandboxHandle.current = null;
+      return;
+    }
+    return useLabStore.subscribe((s, prev) => {
+      // Danh sách dụng cụ đổi → cảnh được dựng lại ở effect trên (đã áp trạng thái mới)
+      if (s.sandboxItems !== prev.sandboxItems) return;
+      if (s.sandboxWorld !== prev.sandboxWorld || s.sandboxSel !== prev.sandboxSel) sandboxHandle.current?.apply(s.sandboxWorld, s.sandboxSel);
+    });
+  }, [sandboxOn]);
 
   // Dựng cảnh chính khi đổi bài (hoặc khi thoát chế độ tự do)
   useEffect(() => {

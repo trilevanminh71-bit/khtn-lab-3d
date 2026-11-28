@@ -5,6 +5,7 @@
  * KHKT Mode, phiên PIN, Auto-Adaptive FPS (mức chất lượng), modal đang mở.
  */
 import { SANDBOX_SLOTS } from '../data/equipmentCatalog';
+import { advanceWorld, createWorld, doAction, setControl, syncWorld, wipeSpill, type SandboxWorld } from '../engines/sandboxSim';
 import { valueIssue } from '../utils/trialTable';
 import { create } from 'zustand';
 import type {
@@ -163,6 +164,10 @@ export interface LabState {
   sandboxOn: boolean;
   /** Dụng cụ đang đặt trên bàn tự do (theo thứ tự chỗ) */
   sandboxItems: string[];
+  /** Trạng thái mô phỏng các dụng cụ trên bàn tự do (van, lửa, nhiệt độ…) — KHÔNG dùng cho bài nộp */
+  sandboxWorld: SandboxWorld;
+  /** Chỗ đang chọn để điều khiển */
+  sandboxSel: number | null;
 
   setPlugins(list: LabPluginDef[]): void;
   setSandbox(on: boolean): void;
@@ -170,6 +175,16 @@ export interface LabState {
   removeSandboxItem(index: number): void;
   replaceSandboxItem(index: number, id: string): void;
   clearSandbox(): void;
+  moveSandboxItem(from: number, to: number): void;
+  selectSandbox(i: number | null): void;
+  sandboxControl(slot: number, key: string, value: number): ActionResult;
+  sandboxAction(slot: number, key: string): ActionResult;
+  /** Tiến thời gian mô phỏng (giây thực); force = bỏ qua trạng thái Dừng (nút Từng bước) */
+  sandboxAdvance(realDt: number, force?: boolean): void;
+  setSandboxRunning(on: boolean): void;
+  setSandboxSpeed(x: number): void;
+  resetSandboxWorld(): void;
+  wipeSandboxSpill(): void;
   setSubject(s: SubjectId): void;
   loadPlugin(id: string): void;
   setSession(s: StudentSession): void;
@@ -316,6 +331,8 @@ export const useLabStore = create<LabState>((set, get) => ({
   pickerSubject: BUILTIN_PLUGINS[0].subject,
   sandboxOn: false,
   sandboxItems: [],
+  sandboxWorld: createWorld([]),
+  sandboxSel: null,
 
   setSandbox(on) {
     logAction(on ? 'sandbox-on' : 'sandbox-off');
@@ -326,21 +343,62 @@ export const useLabStore = create<LabState>((set, get) => ({
     const st = get();
     if (st.sandboxItems.length >= SANDBOX_SLOTS) return { ok: false, message: `Bàn đã đủ ${SANDBOX_SLOTS} dụng cụ — gỡ bớt hoặc bấm Đổi ở một chỗ.` };
     logAction('sandbox-add', id);
-    set({ sandboxItems: [...st.sandboxItems, id] });
+    const items = [...st.sandboxItems, id];
+    set({ sandboxItems: items, sandboxWorld: syncWorld(st.sandboxWorld, st.sandboxItems, items), sandboxSel: items.length - 1 });
     return { ok: true, message: 'Đã đặt lên bàn.' };
   },
   removeSandboxItem(index) {
     logAction('sandbox-remove', String(index));
-    set({ sandboxItems: get().sandboxItems.filter((_, i) => i !== index) });
+    const st = get();
+    set({ sandboxItems: st.sandboxItems.filter((_, i) => i !== index), sandboxWorld: { ...st.sandboxWorld, states: st.sandboxWorld.states.filter((_, i) => i !== index) }, sandboxSel: null });
   },
   replaceSandboxItem(index, id) {
     logAction('sandbox-replace', `${index}:${id}`);
-    set({ sandboxItems: get().sandboxItems.map((x, i) => (i === index ? id : x)) });
+    const st = get();
+    const items = st.sandboxItems.map((x, i) => (i === index ? id : x));
+    set({ sandboxItems: items, sandboxWorld: syncWorld(st.sandboxWorld, st.sandboxItems, items), sandboxSel: index });
   },
   clearSandbox() {
     logAction('sandbox-clear');
-    set({ sandboxItems: [] });
+    set({ sandboxItems: [], sandboxWorld: createWorld([]), sandboxSel: null });
   },
+  moveSandboxItem(from, to) {
+    const st = get();
+    const n = st.sandboxItems.length;
+    if (from === to || from < 0 || from >= n || to < 0 || to >= SANDBOX_SLOTS) return;
+    const t2 = Math.min(to, n - 1);
+    const items = [...st.sandboxItems];
+    const states = [...st.sandboxWorld.states];
+    [items[from], items[t2]] = [items[t2], items[from]];
+    [states[from], states[t2]] = [states[t2], states[from]];
+    logAction('sandbox-move', `${from}>${t2}`);
+    set({ sandboxItems: items, sandboxWorld: { ...st.sandboxWorld, states }, sandboxSel: t2 });
+  },
+  selectSandbox: (i) => set({ sandboxSel: i }),
+  sandboxControl(slot, key, value) {
+    const st = get();
+    const r = setControl(st.sandboxWorld, st.sandboxItems, slot, key, value, st.ppe);
+    if (r.ok) set({ sandboxWorld: r.world });
+    return { ok: r.ok, message: r.message };
+  },
+  sandboxAction(slot, key) {
+    const st = get();
+    const r = doAction(st.sandboxWorld, st.sandboxItems, slot, key, st.ppe);
+    if (r.ok) set({ sandboxWorld: r.world });
+    return { ok: r.ok, message: r.message };
+  },
+  sandboxAdvance(realDt, force = false) {
+    const st = get();
+    if (!st.sandboxOn || !st.sandboxItems.length || (!force && (!st.sandboxWorld.running || st.simPaused))) return;
+    set({ sandboxWorld: advanceWorld(st.sandboxWorld, st.sandboxItems, realDt * st.sandboxWorld.speed) });
+  },
+  setSandboxRunning: (on) => set({ sandboxWorld: { ...get().sandboxWorld, running: on }, simPaused: false }),
+  setSandboxSpeed: (x) => set({ sandboxWorld: { ...get().sandboxWorld, speed: x } }),
+  resetSandboxWorld() {
+    logAction('sandbox-reset');
+    set({ sandboxWorld: createWorld(get().sandboxItems) });
+  },
+  wipeSandboxSpill: () => set({ sandboxWorld: wipeSpill(get().sandboxWorld) }),
 
   setPlugins(list) {
     const cur = get().plugin.id;

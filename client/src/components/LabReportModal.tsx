@@ -85,7 +85,7 @@ export default function LabReportModal() {
 
   const { report, pre, post } = computed;
   const session = s.session;
-  const check = checkSubmission({ plugin: s.plugin, trials: s.trials, studentValue: s.studentValue, conclusion: s.conclusion, startedAt: s.startedAt, preAnswers: s.preAnswers, ctx: s.solveContext() });
+  const check = checkSubmission({ plugin: s.plugin, trials: s.trials, studentValue: s.studentValue, conclusion: s.conclusion, startedAt: s.startedAt, preAnswers: s.preAnswers, ctx: s.solveContext(), sandbox: s.sandboxOn });
   const preSkipped = s.plugin.preQuiz.length > 0 && s.preAnswers.every((a) => a < 0);
 
   const submit = (): void => {

@@ -28,11 +28,14 @@ export function checkSubmission(input: {
   startedAt: number;
   preAnswers: number[];
   ctx: SolveContext;
+  /** Đang ở chế độ Tự do thí nghiệm */
+  sandbox?: boolean;
 }): SubmitCheck {
   const { plugin, trials } = input;
   const valid = validTrials(plugin, trials);
   const blockers: string[] = [];
   const warnings: string[] = [];
+  if (input.sandbox) blockers.push('Đang ở chế độ Tự do thí nghiệm — bấm "Quay lại bài" trước khi nộp.');
   if (valid.length < plugin.minTrials) blockers.push(`Cần ít nhất ${plugin.minTrials} lần đo hợp lệ (đang có ${valid.length}).`);
   const value = parseViNumber(input.studentValue);
   if (!Number.isFinite(value)) blockers.push(`Chưa nhập ${plugin.result.label.toLowerCase()}.`);

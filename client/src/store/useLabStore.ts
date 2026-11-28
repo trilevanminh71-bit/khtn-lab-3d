@@ -4,6 +4,7 @@
  * sự cố, trạng thái cảnh 3D, cài đặt (đồ họa máy yếu, trợ năng, API, PIN), chế độ Split-Screen,
  * KHKT Mode, phiên PIN, Auto-Adaptive FPS (mức chất lượng), modal đang mở.
  */
+import { SANDBOX_SLOTS } from '../data/equipmentCatalog';
 import { valueIssue } from '../utils/trialTable';
 import { create } from 'zustand';
 import type {
@@ -158,8 +159,17 @@ export interface LabState {
   cameraView: { kind: CameraViewKind; tag: string | null; nonce: number };
   /** Môn đang xem trong danh sách bài */
   pickerSubject: SubjectId;
+  /** Chế độ Tự do thí nghiệm (tủ dụng cụ) — tách hẳn khỏi bài chính thức */
+  sandboxOn: boolean;
+  /** Dụng cụ đang đặt trên bàn tự do (theo thứ tự chỗ) */
+  sandboxItems: string[];
 
   setPlugins(list: LabPluginDef[]): void;
+  setSandbox(on: boolean): void;
+  addSandboxItem(id: string): ActionResult;
+  removeSandboxItem(index: number): void;
+  replaceSandboxItem(index: number, id: string): void;
+  clearSandbox(): void;
   setSubject(s: SubjectId): void;
   loadPlugin(id: string): void;
   setSession(s: StudentSession): void;
@@ -304,6 +314,33 @@ export const useLabStore = create<LabState>((set, get) => ({
   simStepNonce: 0,
   cameraView: { kind: 'overview', tag: null, nonce: 0 },
   pickerSubject: BUILTIN_PLUGINS[0].subject,
+  sandboxOn: false,
+  sandboxItems: [],
+
+  setSandbox(on) {
+    logAction(on ? 'sandbox-on' : 'sandbox-off');
+    // Bỏ lần đo đang chờ ghi để không lẫn sang chế độ khác; về góc nhìn chuẩn của cảnh mới
+    set({ sandboxOn: on, pendingTrial: null, simPaused: false, cameraView: { kind: 'overview', tag: null, nonce: get().cameraView.nonce } });
+  },
+  addSandboxItem(id) {
+    const st = get();
+    if (st.sandboxItems.length >= SANDBOX_SLOTS) return { ok: false, message: `Bàn đã đủ ${SANDBOX_SLOTS} dụng cụ — gỡ bớt hoặc bấm Đổi ở một chỗ.` };
+    logAction('sandbox-add', id);
+    set({ sandboxItems: [...st.sandboxItems, id] });
+    return { ok: true, message: 'Đã đặt lên bàn.' };
+  },
+  removeSandboxItem(index) {
+    logAction('sandbox-remove', String(index));
+    set({ sandboxItems: get().sandboxItems.filter((_, i) => i !== index) });
+  },
+  replaceSandboxItem(index, id) {
+    logAction('sandbox-replace', `${index}:${id}`);
+    set({ sandboxItems: get().sandboxItems.map((x, i) => (i === index ? id : x)) });
+  },
+  clearSandbox() {
+    logAction('sandbox-clear');
+    set({ sandboxItems: [] });
+  },
 
   setPlugins(list) {
     const cur = get().plugin.id;
@@ -320,7 +357,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     const p = get().plugins.find((x) => x.id === id);
     if (!p) return;
     logAction('load-plugin', id);
-    set({ ...freshLabState(p, get().session), cameraResetNonce: get().cameraResetNonce + 1, sceneNonce: get().sceneNonce + 1 });
+    set({ ...freshLabState(p, get().session), sandboxOn: false, cameraResetNonce: get().cameraResetNonce + 1, sceneNonce: get().sceneNonce + 1 });
   },
   setSession(s) {
     try {
@@ -367,6 +404,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   },
   triggerInteraction(tag) {
     const st = get();
+    if (st.sandboxOn) return { ok: false, message: 'Đang ở chế độ Tự do thí nghiệm — bấm "Quay lại bài" để đo và ghi số liệu chính thức.' };
     const idx = st.currentStepIndex();
     const step = st.plugin.steps[idx];
     logAction('interact', tag);
@@ -395,6 +433,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     return st.performCurrentStep();
   },
   performCurrentStep() {
+    if (get().sandboxOn) return { ok: false, message: 'Đang ở chế độ Tự do thí nghiệm — bấm "Quay lại bài" để đo và ghi số liệu chính thức.' };
     const st = get();
     const idx = st.currentStepIndex();
     const step = st.plugin.steps[idx];
@@ -423,6 +462,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     return { ok: true, message: `✓ Xong: ${step.title}` };
   },
   takeMeasurement() {
+    if (get().sandboxOn) return { ok: false, message: 'Đang ở chế độ Tự do thí nghiệm — bấm "Quay lại bài" để đo và ghi số liệu chính thức.' };
     const st = get();
     const measureIdx = st.plugin.steps.findIndex((s) => s.action === 'measure');
     const cur = st.currentStepIndex();
@@ -476,6 +516,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     return { ok: true, message: Object.keys(result.values).length > 2 ? 'Đo xong rồi! Bấm "Ghi vào bảng".' : `${describe}. Bấm "Ghi vào bảng".` };
   },
   commitPending() {
+    if (get().sandboxOn) return { ok: false, message: 'Đang ở chế độ Tự do thí nghiệm — bấm "Quay lại bài" để đo và ghi số liệu chính thức.' };
     const st = get();
     if (!st.pendingTrial) return { ok: false, message: 'Chưa có lần đo nào để ghi.' };
     const issue = valueIssue(st.plugin, st.pendingTrial.values);
@@ -489,6 +530,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   },
   discardPending: () => set({ pendingTrial: null }),
   addManualTrial(values) {
+    if (get().sandboxOn) return;
     const st = get();
     const trial: TrialRecord = { index: st.trials.length + 1, params: { ...st.params }, values, at: Date.now(), manual: true };
     logAction('manual-trial', JSON.stringify(values));

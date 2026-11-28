@@ -164,11 +164,12 @@ export class ThreeEngineCore {
     return { scene, handle, lights: sun };
   }
 
-  setMainScene(handle: SceneHandle): void {
+  /** keepCamera: giữ nguyên góc nhìn hiện tại (ví dụ chỉ thêm/bớt dụng cụ trên bàn tự do) */
+  setMainScene(handle: SceneHandle, keepCamera = false): void {
     if (this.main) this.disposeView(this.main);
     this.main = this.makeView(handle);
     if (this.debug) this.attachDebug();
-    this.resetCamera(true);
+    if (!keepCamera) this.resetCamera(true);
   }
 
   setCompareScene(handle: SceneHandle | null): void {

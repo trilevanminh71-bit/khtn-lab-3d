@@ -14,10 +14,11 @@ export function SceneDock() {
   const params = useLabStore((s) => s.params);
   const completed = useLabStore((s) => s.completedSteps);
   const submitted = useLabStore((s) => s.submitted);
+  const sandboxOn = useLabStore((s) => s.sandboxOn);
   // Màn hình hẹp (điện thoại): mặc định thu gọn để không che cảnh 3D
   const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 900);
   const sliders = plugin.params.filter((p) => !p.options && matchShowIf(p.showIf, params));
-  if (!sliders.length || submitted) return null;
+  if (!sliders.length || submitted || sandboxOn) return null;
   const locked = plugin.steps.find((s) => !completed.includes(s.id))?.lockParams ?? [];
   if (!open) {
     return (

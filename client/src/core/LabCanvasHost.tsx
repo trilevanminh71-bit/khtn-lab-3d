@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ThreeEngineCore } from './ThreeEngineCore';
 import { useLabStore } from '../store/useLabStore';
 import { applyAssetOverrides, buildSceneForPlugin } from '../engines/sceneFactory';
+import { buildSandboxScene } from '../engines/sandboxSceneBuilder';
+import { equipmentById } from '../data/equipmentCatalog';
 import { getSolver } from '../engines/solverRegistry';
 import { generateHiddenParams, mulberry32, sessionSeed } from '../utils/randomizer';
 import { APP_CONFIG } from '../config/appConfig';
@@ -39,6 +41,9 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   const paused = useLabStore((s) => s.simPaused);
   const stepNonce = useLabStore((s) => s.simStepNonce);
   const cameraView = useLabStore((s) => s.cameraView);
+  const sandboxOn = useLabStore((s) => s.sandboxOn);
+  const sandboxItems = useLabStore((s) => s.sandboxItems);
+  const wasSandbox = useRef(false);
 
   // Khởi tạo engine một lần
   useEffect(() => {
@@ -48,6 +53,15 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
       ref.current,
       {
         onInteract: (tag) => {
+          if (useLabStore.getState().sandboxOn) {
+            // Tự do thí nghiệm: chỉ hiệu ứng minh họa, không đổi số liệu bài
+            const id = tag.split(':')[2] ?? '';
+            engineRef.current?.getMainHandle()?.react?.(tag);
+            const def = equipmentById(id);
+            if (def) useLabStore.getState().toast('info', `${def.name}: ${def.action}`);
+            logAction('sandbox-touch', id);
+            return;
+          }
           const r = useLabStore.getState().triggerInteraction(tag);
           useLabStore.getState().toast(r.ok ? 'success' : 'warning', r.message);
         },
@@ -85,10 +99,19 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
     };
   }, [onContextLost]);
 
-  // Dựng cảnh chính khi đổi bài
+  // Chế độ Tự do thí nghiệm: dựng bàn với dụng cụ đã chọn (giữ góc nhìn khi chỉ thêm/bớt dụng cụ)
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || !sandboxOn) return;
+    engine.setMainScene(buildSandboxScene(sandboxItems), wasSandbox.current);
+    wasSandbox.current = true;
+  }, [sandboxOn, sandboxItems]);
+
+  // Dựng cảnh chính khi đổi bài (hoặc khi thoát chế độ tự do)
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || sandboxOn) return;
+    wasSandbox.current = false;
     const handle = buildSceneForPlugin(plugin);
     engine.setMainScene(handle);
     reactedRef.current = new Set();
@@ -104,7 +127,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
       alive = false;
       cleanup?.();
     };
-  }, [plugin, sceneNonce]);
+  }, [plugin, sceneNonce, sandboxOn]);
 
   // Cảnh so sánh (split-screen)
   useEffect(() => {
@@ -129,6 +152,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   }, [split, compareId, plugins]);
 
   useEffect(() => {
+    if (useLabStore.getState().sandboxOn) return;
     engineRef.current?.getMainHandle()?.update(visual, nonce);
   }, [visual, nonce]);
 
@@ -164,6 +188,10 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
+    if (sandboxOn) {
+      engine.setHighlightTag(null);
+      return;
+    }
     const step = plugin.steps.find((s) => !completed.includes(s.id));
     const snapIds = new Set(engine.getMainHandle()?.snapPoints.map((s) => s.id) ?? []);
     for (const s of plugin.steps) {
@@ -180,7 +208,7 @@ export function LabCanvasHost({ onContextLost }: { onContextLost: () => void }) 
     }
     const sp = engine.getMainHandle()?.snapPoints.find((s) => s.id === step.trigger);
     engine.setHighlightTag(sp ? sp.accepts : step.trigger);
-  }, [completed, plugin]);
+  }, [completed, plugin, sandboxOn]);
 
   return (
     <div className="relative h-full w-full">

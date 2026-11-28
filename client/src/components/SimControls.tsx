@@ -16,7 +16,8 @@ const BTN = 'btn min-h-[40px] px-2.5 py-1 text-xs';
 
 export function SimControls() {
   const paused = useLabStore((s) => s.simPaused);
-  const hasRun = useLabStore((s) => s.lastMeasureVisual !== null);
+  const hasRun = useLabStore((s) => s.lastMeasureVisual !== null && !s.sandboxOn);
+  const sandboxOn = useLabStore((s) => s.sandboxOn);
   const plugin = useLabStore((s) => s.plugin);
   const completed = useLabStore((s) => s.completedSteps);
   const [more, setMore] = useState(false);
@@ -76,7 +77,7 @@ export function SimControls() {
             <Play size={14} /> Tiếp tục
           </button>
         ) : (
-          <button className={BTN} onClick={() => st().simPause()} disabled={!hasRun} title={hasRun ? 'Dừng hình để quan sát kĩ' : 'Đo một lần rồi mới tạm dừng được'}>
+          <button className={BTN} onClick={() => st().simPause()} disabled={!hasRun && !sandboxOn} title={hasRun ? 'Dừng hình để quan sát kĩ' : 'Đo một lần rồi mới tạm dừng được'}>
             <Pause size={14} /> Tạm dừng
           </button>
         )}

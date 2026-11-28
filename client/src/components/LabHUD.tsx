@@ -7,7 +7,7 @@
  *  - Tự lưu nháp mỗi 5 giây vào IndexedDB; thẻ "Tiếp tục bài đang làm dở"; biểu đồ và phiếu thí nghiệm.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Bot, Calculator, Camera, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Eye, FileText, Play, Printer, Repeat, RotateCcw, Ruler, TableProperties, UserRound } from 'lucide-react';
+import { Boxes, Bot, Calculator, Camera, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Eye, FileText, Play, Printer, Repeat, RotateCcw, Ruler, TableProperties, UserRound } from 'lucide-react';
 import { hasUnsavedWork, useLabStore } from '../store/useLabStore';
 import { APP_CONFIG, SUBJECT_COLORS } from '../config/appConfig';
 import { clearDraft, saveDraft } from '../offline/db';
@@ -19,6 +19,7 @@ import { hashString } from '../utils/randomizer';
 import { ModalShell } from './ModalShell';
 import { InsightPanel, Mc964Console, OxidationTool, ParamControls, PrincipleBox, ResumeCard, SummaryPanel } from './LessonPanels';
 import { ManualRowForm, TrialTable } from './TrialTable';
+import { SandboxPanel } from './SandboxPanel';
 import { getSolver } from '../engines/solverRegistry';
 import { parseViNumber } from '../services/appServices';
 import { ChartGrid } from './DataChart';
@@ -249,6 +250,7 @@ export function LabHUD() {
   const modal = useLabStore((s) => s.modal);
   const submitted = useLabStore((s) => s.submitted);
   const pending = useLabStore((s) => s.pendingTrial);
+  const sandboxOn = useLabStore((s) => s.sandboxOn);
   const readyAt = useLabStore((s) => s.pendingReadyAt);
   const paused = useLabStore((s) => s.simPaused);
   const [now, setNow] = useState(() => Date.now());
@@ -350,8 +352,8 @@ export function LabHUD() {
   const pendingIssue = pending ? valueIssue(plugin, pending.values) : null;
   const check = useMemo(() => {
     const s = useLabStore.getState();
-    return checkSubmission({ plugin, trials, studentValue, conclusion, startedAt: s.startedAt, preAnswers: s.preAnswers, ctx: s.solveContext() });
-  }, [plugin, trials, studentValue, conclusion]);
+    return checkSubmission({ plugin, trials, studentValue, conclusion, startedAt: s.startedAt, preAnswers: s.preAnswers, ctx: s.solveContext(), sandbox: s.sandboxOn });
+  }, [plugin, trials, studentValue, conclusion, sandboxOn]);
   const submitBlocked = !submitted && check.blockers.length > 0;
   /** Một hành động chính duy nhất cho bước hiện tại */
   const measureLabel = currentStep?.trigger === 'ball' ? 'Thả bi' : 'Đo';
@@ -379,11 +381,18 @@ export function LabHUD() {
 
   return (
     <aside className="panel no-print m-1 flex min-h-0 flex-col landscape:w-[380px] lg:w-[400px] lg:max-w-[40vw] portrait:max-h-[54vh]" data-tour="hud" aria-label="Bảng điều khiển thí nghiệm">
+      {sandboxOn ? (
+        <SandboxPanel />
+      ) : (
+      <>
       <div className="space-y-1.5 border-b border-slate-700 p-2">
         <div className="flex gap-1.5">
           <button className="btn min-h-[44px] min-w-0 flex-1 justify-between text-left" onClick={() => st().openLessons(subject)} aria-label={`Đổi bài. Đang mở: ${plugin.shortTitle}`} style={{ borderLeft: `4px solid ${SUBJECT_COLORS[subject]}` }}>
             <span className="truncate font-semibold">{plugin.shortTitle}</span>
             <span className="shrink-0 text-xs text-lab-400">Đổi bài</span>
+          </button>
+          <button className="btn min-h-[44px] px-2.5" onClick={() => st().setSandbox(true)} aria-label="Tủ dụng cụ – Tự do thí nghiệm" title="Tủ dụng cụ: tự chọn dụng cụ để khám phá (không tính vào bài nộp)">
+            <Boxes size={17} /> <span className="hidden text-xs sm:inline">Tủ dụng cụ</span>
           </button>
           <button className="btn min-h-[44px] px-2.5" onClick={() => st().openModal('session')} aria-label="Thông tin học sinh" title={session ? `${session.studentName} · ${session.classCode}/${session.studentCode}` : 'Nhập tên và lớp'}>
             <UserRound size={17} /> {!session && <span className="text-xs">Nhập tên</span>}
@@ -658,6 +667,8 @@ export function LabHUD() {
           </>
         )}
       </div>
+      </>
+      )}
       {modal === 'session' && <SessionForm onClose={() => st().closeModal()} />}
     </aside>
   );
